@@ -968,11 +968,10 @@ public class AwarenessAllocationTests extends OpenSearchAllocationTestCase {
         assertThat(strategy.reroute(clusterState, "reroute").routingTable(), sameInstance(clusterState.routingTable()));
 
         logger.info("--> add another node with a new rack, make sure nothing moves");
-        DiscoveryNode node7= newNode("node7", singletonMap("zone", "zone_3"));
-        DiscoveryNode node8= newNode("node8", singletonMap("zone", "zone_3"));
+
         clusterState = ClusterState.builder(clusterState).nodes(DiscoveryNodes.builder(clusterState.nodes())
-            .add(node7)
-            .add(node8)
+            .add(newNode("node7", singletonMap("zone", "zone_3")))
+            .add(newNode("node8", singletonMap("zone", "zone_3")))
             .add(newNode("node9", singletonMap("zone", "zone_3")))
         ).build();
         ClusterState newState = strategy.reroute(clusterState, "reroute");
@@ -981,9 +980,11 @@ public class AwarenessAllocationTests extends OpenSearchAllocationTestCase {
         }
         assertThat(newState.getRoutingNodes().shardsWithState(STARTED).size(), equalTo(63));
 
+        logger.info("--> Remove random node from zones holding all primary and all replicas");
         //remove two nodes in one zone to cause distribution zone1->3 , zone2->3, zone3->1
-        newState = removeNode(newState, "node7", strategy);
-        newState = removeNode(newState, "node8", strategy);
+        newState = removeNode(newState, randomFrom("node1", "node7" ), strategy);
+        logger.info("--> Remove another random node from zones holding all primary and all replicas");
+        newState = removeNode(newState, randomFrom("node2", "node8" ), strategy);
         newState = strategy.reroute(newState, "reroute");
         while (newState.getRoutingNodes().shardsWithState(INITIALIZING).isEmpty() == false) {
             newState = startInitializingShardsAndReroute(strategy, newState);
