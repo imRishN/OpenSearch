@@ -32,12 +32,17 @@
 
 package org.opensearch.cluster.routing.allocation.decider;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 
 import com.carrotsearch.hppc.ObjectIntHashMap;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.message.ParameterizedMessage;
 import org.opensearch.cluster.metadata.IndexMetadata;
 import org.opensearch.cluster.routing.RoutingNode;
 import org.opensearch.cluster.routing.ShardRouting;
@@ -47,6 +52,7 @@ import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Setting;
 import org.opensearch.common.settings.Setting.Property;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.set.Sets;
 
 import static java.util.Collections.emptyList;
 
@@ -99,17 +105,34 @@ public class AwarenessAllocationDecider extends AllocationDecider {
             Property.NodeScope);
     public static final Setting<Settings> CLUSTER_ROUTING_ALLOCATION_AWARENESS_FORCE_GROUP_SETTING =
         Setting.groupSetting("cluster.routing.allocation.awareness.force.", Property.Dynamic, Property.NodeScope);
+    public static final Setting<Settings> CLUSTER_ROUTING_ALLOCATION_AWARENESS_ATTRIBUTE_CAPACITY_GROUP_SETTING =
+        Setting.groupSetting("cluster.routing.allocation.awareness.attribute.", Property.Dynamic, Property.NodeScope);
+    public static final Setting<Boolean> CLUSTER_ROUTING_ALLOCATION_AWARENESS_FORCED_ALLOCATION_DISABLE_SETTING =
+        Setting.boolSetting("cluster.routing.allocation.awareness.forced_allocation.disable", false,
+            Property.Dynamic, Property.NodeScope);
 
     private volatile List<String> awarenessAttributes;
 
     private volatile Map<String, List<String>> forcedAwarenessAttributes;
 
+    private volatile Map<String, Integer> awarenessAttributeCapacities;
+
+    private volatile boolean disableForcedAllocation;
+
+    private static final Logger logger = LogManager.getLogger(AwarenessAllocationDecider.class);
+
     public AwarenessAllocationDecider(Settings settings, ClusterSettings clusterSettings) {
         this.awarenessAttributes = CLUSTER_ROUTING_ALLOCATION_AWARENESS_ATTRIBUTE_SETTING.get(settings);
+        this.disableForcedAllocation = CLUSTER_ROUTING_ALLOCATION_AWARENESS_FORCED_ALLOCATION_DISABLE_SETTING.get(settings);
         clusterSettings.addSettingsUpdateConsumer(CLUSTER_ROUTING_ALLOCATION_AWARENESS_ATTRIBUTE_SETTING, this::setAwarenessAttributes);
         setForcedAwarenessAttributes(CLUSTER_ROUTING_ALLOCATION_AWARENESS_FORCE_GROUP_SETTING.get(settings));
+        setAwarenessAttributeCapacities(CLUSTER_ROUTING_ALLOCATION_AWARENESS_ATTRIBUTE_CAPACITY_GROUP_SETTING.get(settings));
         clusterSettings.addSettingsUpdateConsumer(CLUSTER_ROUTING_ALLOCATION_AWARENESS_FORCE_GROUP_SETTING,
                 this::setForcedAwarenessAttributes);
+        clusterSettings.addSettingsUpdateConsumer(CLUSTER_ROUTING_ALLOCATION_AWARENESS_ATTRIBUTE_CAPACITY_GROUP_SETTING,
+                this::setAwarenessAttributeCapacities);
+        clusterSettings.addSettingsUpdateConsumer(CLUSTER_ROUTING_ALLOCATION_AWARENESS_FORCED_ALLOCATION_DISABLE_SETTING,
+                this::setDisableForcedAllocation);
     }
 
     private void setForcedAwarenessAttributes(Settings forceSettings) {
@@ -124,8 +147,22 @@ public class AwarenessAllocationDecider extends AllocationDecider {
         this.forcedAwarenessAttributes = forcedAwarenessAttributes;
     }
 
+    private void setAwarenessAttributeCapacities(Settings awarenessCapacitySettings) {
+        Map<String, Integer> groupCapacity = new HashMap<>();
+        Map<String, Settings> forceGroups = awarenessCapacitySettings.getAsGroups();
+        for (Map.Entry<String, Settings> entry : forceGroups.entrySet()) {
+            Integer capacity = entry.getValue().getAsInt("capacity", -1);
+            groupCapacity.put(entry.getKey(), capacity);
+        }
+        this.awarenessAttributeCapacities = groupCapacity;
+    }
+
     private void setAwarenessAttributes(List<String> awarenessAttributes) {
         this.awarenessAttributes = awarenessAttributes;
+    }
+
+    private void setDisableForcedAllocation(boolean disableForcedAllocation) {
+        this.disableForcedAllocation = disableForcedAllocation;
     }
 
     @Override
@@ -158,6 +195,26 @@ public class AwarenessAllocationDecider extends AllocationDecider {
 
             // build attr_value -> nodes map
             ObjectIntHashMap<String> nodesPerAttribute = allocation.routingNodes().nodesPerAttributesCounts(awarenessAttribute);
+
+            if (disableForcedAllocation) {
+                //the current node attribute value under consideration
+                String nodeAttributeValue = node.node().getAttributes().get(awarenessAttribute);
+                Set<String> skewedAttributeValues = null;
+                try {
+                    skewedAttributeValues = skewedNodesPerAttributeValue(nodesPerAttribute, awarenessAttribute);
+                } catch (IllegalStateException e) {
+                    logger.warn(() -> new ParameterizedMessage("Inconsistent configuration to decide on skewness for attribute " +
+                        "[{}] due to ", awarenessAttribute) , e);
+                }
+                if (skewedAttributeValues != null && skewedAttributeValues.contains(nodeAttributeValue)) {
+                    //the current attribute value has nodes that are skewed
+                    return allocation.decision(Decision.NO, NAME,
+                        "there are too many copies of the shard allocated to nodes with attribute [%s], due to skewed distribution of " +
+                            "nodes for attribute value [%s] expected the nodes for this attribute to be [%d] but found nodes per attribute " +
+                            "to be [%d]", awarenessAttribute, nodeAttributeValue, awarenessAttributeCapacities.get(awarenessAttribute),
+                        nodesPerAttribute.get(awarenessAttribute));
+                }
+            }
 
             // build the count of shards per attribute value
             ObjectIntHashMap<String> shardPerAttribute = new ObjectIntHashMap<>();
@@ -211,5 +268,36 @@ public class AwarenessAllocationDecider extends AllocationDecider {
         }
 
         return allocation.decision(Decision.YES, NAME, "node meets all awareness attribute requirements");
+    }
+
+    private Set<String> skewedNodesPerAttributeValue(ObjectIntHashMap<String> nodesPerAttribute, String awarenessAttribute) {
+        int capacity = awarenessAttributeCapacities.getOrDefault(awarenessAttribute, -1);
+        if (nodesPerAttribute.size() < 2 || forcedAwarenessAttributes.containsKey(awarenessAttribute) == false || capacity <=0) {
+            return Collections.EMPTY_SET;
+        }
+        Set<String> underCapacityAttributeValues = null;
+        //Values : zone1, zone2, zone3
+        List<String> forcedAwarenessAttribute = forcedAwarenessAttributes.get(awarenessAttribute);
+        if (forcedAwarenessAttribute.size() == nodesPerAttribute.size()) {
+            for(String attributeValue : forcedAwarenessAttribute) {
+                if (nodesPerAttribute.containsKey(attributeValue) == false) {
+                    //forced attribute values and discovery nodes have a mismatch
+                    throw new IllegalStateException("Missing attribute value in discovered nodes:" + attributeValue);
+                } else if (nodesPerAttribute.get(attributeValue) < capacity) {
+                    if (underCapacityAttributeValues == null) {
+                        underCapacityAttributeValues = Sets.newHashSet(attributeValue);
+                    } else {
+                        underCapacityAttributeValues.add(attributeValue);
+                    }
+                } else if (nodesPerAttribute.get(attributeValue) > capacity) {
+                    throw new IllegalStateException("Unexpected capacity for attribute value :" + attributeValue + "expected : "+ capacity
+                    + "found :" + nodesPerAttribute.get(attributeValue));
+                }
+            }
+        }
+        if (underCapacityAttributeValues != null && underCapacityAttributeValues.size() == forcedAwarenessAttribute.size()) {
+            throw new IllegalStateException("Unexpected capacity for attribute  :" + awarenessAttribute + "capacity" + capacity);
+        }
+        return underCapacityAttributeValues;
     }
 }
