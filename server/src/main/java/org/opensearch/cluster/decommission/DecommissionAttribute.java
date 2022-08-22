@@ -100,12 +100,8 @@ public final class DecommissionAttribute implements Writeable {
         return Objects.hash(attributeName, attributeValue);
     }
 
-
     @Override
     public String toString() {
-        return "DecommissionAttribute{" +
-            "attributeName='" + attributeName + '\'' +
-            ", attributeValue='" + attributeValue + '\'' +
-            '}';
+        return "DecommissionAttribute{" + "attributeName='" + attributeName + '\'' + ", attributeValue='" + attributeValue + '\'' + '}';
     }
 }
