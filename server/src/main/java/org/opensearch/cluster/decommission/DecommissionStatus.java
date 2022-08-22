@@ -75,17 +75,17 @@ public enum DecommissionStatus {
     }
 
     public static DecommissionStatus fromString(String status) {
-        if ("init".equals(status)) {
+        if ("INIT".equals(status)) {
             return INIT;
-        } else if ("decommissioning".equals(status)) {
+        } else if ("DECOMMISSIONING".equals(status)) {
             return DECOMMISSIONING;
-        } else if ("decommissioned".equals(status)) {
+        } else if ("DECOMMISSIONED".equals(status)) {
             return DECOMMISSIONED;
-        } else if ("decommission_failed".equals(status)) {
+        } else if ("DECOMMISSION_FAILED".equals(status)) {
             return DECOMMISSION_FAILED;
-        } else if ("recommissioning".equals(status)) {
+        } else if ("RECOMMISSIONING".equals(status)) {
             return RECOMMISSIONING;
-        } else if ("recommission_failed".equals(status)) {
+        } else if ("RECOMMISSION_FAILED".equals(status)) {
             return RECOMMISSION_FAILED;
         }
         throw new IllegalStateException("No status match for [" + status + "]");
