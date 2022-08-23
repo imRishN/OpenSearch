@@ -16,6 +16,7 @@ import org.opensearch.action.support.clustermanager.TransportClusterManagerNodeA
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.block.ClusterBlockException;
 import org.opensearch.cluster.block.ClusterBlockLevel;
+import org.opensearch.cluster.decommission.DecommissionService;
 import org.opensearch.cluster.metadata.IndexNameExpressionResolver;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
@@ -29,11 +30,13 @@ public class TransportPutDecommissionAction extends TransportClusterManagerNodeA
 
     private static final Logger logger = LogManager.getLogger(TransportPutDecommissionAction.class);
 
+    DecommissionService decommissionService;
+
     @Inject
     public TransportPutDecommissionAction(
         TransportService transportService,
         ClusterService clusterService,
-        // DecommissionService decommissionService,
+        DecommissionService decommissionService,
         ThreadPool threadPool,
         ActionFilters actionFilters,
         IndexNameExpressionResolver indexNameExpressionResolver
@@ -48,7 +51,7 @@ public class TransportPutDecommissionAction extends TransportClusterManagerNodeA
             indexNameExpressionResolver
         );
         // TODO - uncomment when integrating with the service
-        // this.decommissionService = decommissionService;
+         this.decommissionService = decommissionService;
     }
 
     @Override
@@ -73,12 +76,12 @@ public class TransportPutDecommissionAction extends TransportClusterManagerNodeA
         ActionListener<PutDecommissionResponse> listener
     ) throws Exception {
         logger.info("initiating awareness attribute [{}] decommissioning", request.getDecommissionAttribute().toString());
-        listener.onResponse(new PutDecommissionResponse(true)); // TODO - remove after integration
+//        listener.onResponse(new PutDecommissionResponse(true)); // TODO - remove after integration
         // TODO - uncomment when integrating with the service
-        // decommissionService.initiateAttributeDecommissioning(
-        // request.getDecommissionAttribute(),
-        // listener,
-        // state
-        // );
+         decommissionService.initiateAttributeDecommissioning(
+         request.getDecommissionAttribute(),
+         listener,
+         state
+         );
     }
 }

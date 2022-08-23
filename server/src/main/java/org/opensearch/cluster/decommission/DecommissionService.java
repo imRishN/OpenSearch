@@ -18,6 +18,7 @@ import org.opensearch.action.admin.cluster.configuration.AddVotingConfigExclusio
 import org.opensearch.action.admin.cluster.configuration.ClearVotingConfigExclusionsAction;
 import org.opensearch.action.admin.cluster.configuration.ClearVotingConfigExclusionsRequest;
 import org.opensearch.action.admin.cluster.configuration.ClearVotingConfigExclusionsResponse;
+import org.opensearch.action.admin.cluster.decommission.awareness.put.PutDecommissionResponse;
 import org.opensearch.cluster.ClusterChangedEvent;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.ClusterStateApplier;
@@ -103,7 +104,7 @@ public class DecommissionService implements ClusterStateApplier {
 
     public void initiateAttributeDecommissioning(
         final DecommissionAttribute decommissionAttribute,
-        final ActionListener<ClusterStateUpdateResponse> listener,
+        final ActionListener<PutDecommissionResponse> listener,
         ClusterState state
     ) {
         validateAwarenessAttribute(decommissionAttribute, getAwarenessAttributes());
@@ -114,7 +115,7 @@ public class DecommissionService implements ClusterStateApplier {
 
     private void excludeDecommissionedClusterManagerNodesFromVotingConfig(
         DecommissionAttribute decommissionAttribute,
-        final ActionListener<ClusterStateUpdateResponse> listener
+        final ActionListener<PutDecommissionResponse> listener
     ) {
         final Predicate<DiscoveryNode> shouldDecommissionPredicate = discoveryNode -> nodeHasDecommissionedAttribute(
             discoveryNode,
@@ -208,7 +209,7 @@ public class DecommissionService implements ClusterStateApplier {
      */
     private void registerDecommissionAttribute(
         final DecommissionAttribute decommissionAttribute,
-        final ActionListener<ClusterStateUpdateResponse> listener
+        final ActionListener<PutDecommissionResponse> listener
     ) {
         assert transportService.getLocalNode().isClusterManagerNode()
             && !nodeHasDecommissionedAttribute(transportService.getLocalNode(), decommissionAttribute)
@@ -269,7 +270,7 @@ public class DecommissionService implements ClusterStateApplier {
                 public void clusterStateProcessed(String source, ClusterState oldState, ClusterState newState) {
                     assert !newState.equals(oldState) : "no update in cluster state after initiating decommission request.";
                     // Do we attach a listener here with failed acknowledgement to the request?
-                    listener.onResponse(new ClusterStateUpdateResponse(true));
+                    listener.onResponse(new PutDecommissionResponse(true));
                     initiateGracefulDecommission(newState);
                 }
             }
