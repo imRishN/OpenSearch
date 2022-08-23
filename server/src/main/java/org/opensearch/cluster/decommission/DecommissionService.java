@@ -110,12 +110,12 @@ public class DecommissionService implements ClusterStateApplier {
         validateAwarenessAttribute(decommissionAttribute, getAwarenessAttributes());
         this.clusterState = state;
         logger.info("initiating awareness attribute [{}] decommissioning", decommissionAttribute.toString());
-        excludeDecommissionedClusterManagerNodesFromVotingConfig(decommissionAttribute, listener);
+        excludeDecommissionedClusterManagerNodesFromVotingConfig(decommissionAttribute);
+        registerDecommissionAttribute(decommissionAttribute, listener);
     }
 
     private void excludeDecommissionedClusterManagerNodesFromVotingConfig(
-        DecommissionAttribute decommissionAttribute,
-        final ActionListener<PutDecommissionResponse> listener
+        DecommissionAttribute decommissionAttribute
     ) {
         final Predicate<DiscoveryNode> shouldDecommissionPredicate = discoveryNode -> nodeHasDecommissionedAttribute(
             discoveryNode,
@@ -141,7 +141,6 @@ public class DecommissionService implements ClusterStateApplier {
                             + "proceeding to drain the decommissioned nodes",
                         clusterManagerNodesToBeDecommissioned.toString()
                     );
-                    registerDecommissionAttribute(decommissionAttribute, listener);
                 }
 
                 @Override
@@ -211,10 +210,14 @@ public class DecommissionService implements ClusterStateApplier {
         final DecommissionAttribute decommissionAttribute,
         final ActionListener<PutDecommissionResponse> listener
     ) {
-        assert transportService.getLocalNode().isClusterManagerNode()
-            && !nodeHasDecommissionedAttribute(transportService.getLocalNode(), decommissionAttribute)
-            : "cannot register decommission attribute, as local node is not master or is going to be decommissioned";
-
+        logger.info("Node is - " + transportService.getLocalNode());
+        if (!transportService.getLocalNode().isClusterManagerNode()
+            || nodeHasDecommissionedAttribute(transportService.getLocalNode(), decommissionAttribute))
+        {
+            throw new NotClusterManagerException(
+                "Node [" + transportService.getLocalNode() + "] not eligible to execute decommission request"
+            );
+        }
         clusterService.submitStateUpdateTask(
             "put_decommission [" + decommissionAttribute + "]",
             new ClusterStateUpdateTask(Priority.URGENT) {
