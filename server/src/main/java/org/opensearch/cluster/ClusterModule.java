@@ -192,7 +192,12 @@ public class ClusterModule extends AbstractModule {
             ComposableIndexTemplateMetadata::readDiffFrom
         );
         registerMetadataCustom(entries, DataStreamMetadata.TYPE, DataStreamMetadata::new, DataStreamMetadata::readDiffFrom);
-        registerMetadataCustom(entries, DecommissionAttributeMetadata.TYPE, DecommissionAttributeMetadata::new, DecommissionAttributeMetadata::readDiffFrom);
+        registerMetadataCustom(
+            entries,
+            DecommissionAttributeMetadata.TYPE,
+            DecommissionAttributeMetadata::new,
+            DecommissionAttributeMetadata::readDiffFrom
+        );
         // Task Status (not Diffable)
         entries.add(new Entry(Task.Status.class, PersistentTasksNodeService.Status.NAME, PersistentTasksNodeService.Status::new));
         return entries;
