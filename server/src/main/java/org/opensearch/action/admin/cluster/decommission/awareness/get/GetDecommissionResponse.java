@@ -35,13 +35,13 @@ public class GetDecommissionResponse extends ActionResponse implements ToXConten
 
     GetDecommissionResponse(StreamInput in) throws IOException {
         this.decommissionedAttribute = new DecommissionAttribute(in);
-        this.status = DecommissionStatus.fromValue(in.readByte());
+        this.status = DecommissionStatus.fromString(in.readString());
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         decommissionedAttribute.writeTo(out);
-        out.writeByte(status.value());
+        out.writeString(status.status());
     }
 
     public DecommissionAttribute getDecommissionedAttribute() {

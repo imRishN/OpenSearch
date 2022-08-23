@@ -16,6 +16,7 @@ import org.opensearch.cluster.block.ClusterBlockException;
 import org.opensearch.cluster.block.ClusterBlockLevel;
 import org.opensearch.cluster.decommission.DecommissionAttribute;
 import org.opensearch.cluster.decommission.DecommissionStatus;
+import org.opensearch.cluster.metadata.DecommissionAttributeMetadata;
 import org.opensearch.cluster.metadata.IndexNameExpressionResolver;
 import org.opensearch.cluster.metadata.Metadata;
 import org.opensearch.cluster.service.ClusterService;
@@ -64,9 +65,9 @@ public class TransportGetDecommissionAction extends TransportClusterManagerNodeR
         ActionListener<GetDecommissionResponse> listener
     ) throws Exception {
         Metadata metadata = state.metadata();
-        // DecommissionAttributeMetadata decommissionedAttributes = metadata.custom(DecommissionAttributeMetadata.TYPE);
+         DecommissionAttributeMetadata decommissionedAttributes = metadata.custom(DecommissionAttributeMetadata.TYPE);
         // TODO - update once service layer changes are merged
-        listener.onResponse(new GetDecommissionResponse(new DecommissionAttribute("zone", "zone-1"), DecommissionStatus.DECOMMISSIONED));
+        listener.onResponse(new GetDecommissionResponse(decommissionedAttributes.decommissionAttribute(), decommissionedAttributes.status()));
     }
 
     @Override

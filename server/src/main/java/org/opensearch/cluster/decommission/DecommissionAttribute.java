@@ -8,6 +8,7 @@
 
 package org.opensearch.cluster.decommission;
 
+import org.opensearch.cluster.routing.ShardRouting;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.io.stream.Writeable;
@@ -15,19 +16,14 @@ import org.opensearch.common.io.stream.Writeable;
 import java.io.IOException;
 import java.util.Objects;
 
+/**
+ * {@link DecommissionAttribute} encapsulates information about decommissioned node attribute like attribute name, attribute value.
+ *
+ * @opensearch.internal
+ */
 public final class DecommissionAttribute implements Writeable {
     private final String attributeName;
     private final String attributeValue;
-
-    /**
-     * Update the attribute value for a given attribute name to decommission
-     *
-     * @param decommissionAttribute current decommissioned attribute object
-     * @param attributeValue       attribute value to be updated with
-     */
-    public DecommissionAttribute(DecommissionAttribute decommissionAttribute, String attributeValue) {
-        this(decommissionAttribute.attributeName, attributeValue);
-    }
 
     /**
      * Constructs new decommission attribute name value pair
@@ -72,16 +68,6 @@ public final class DecommissionAttribute implements Writeable {
     public void writeTo(StreamOutput out) throws IOException {
         out.writeString(attributeName);
         out.writeString(attributeValue);
-    }
-
-    /**
-     * Checks if this instance is equal to the other instance in attributeName but differ in attribute value {@link #attributeValue}.
-     *
-     * @param other other decommission attribute name value
-     * @return {@code true} if both instances equal in attributeName fields but the attributeValue field
-     */
-    public boolean equalsIgnoreValues(DecommissionAttribute other) {
-        return attributeName.equals(other.attributeName);
     }
 
     @Override
