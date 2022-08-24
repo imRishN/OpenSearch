@@ -18,6 +18,7 @@ import org.opensearch.action.admin.cluster.configuration.AddVotingConfigExclusio
 import org.opensearch.action.admin.cluster.configuration.ClearVotingConfigExclusionsAction;
 import org.opensearch.action.admin.cluster.configuration.ClearVotingConfigExclusionsRequest;
 import org.opensearch.action.admin.cluster.configuration.ClearVotingConfigExclusionsResponse;
+import org.opensearch.action.admin.cluster.decommission.awareness.put.PutDecommissionResponse;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.ClusterStateObserver;
 import org.opensearch.cluster.ClusterStateUpdateTask;
@@ -102,7 +103,7 @@ public class DecommissionService {
 
     public void initiateAttributeDecommissioning(
         final DecommissionAttribute decommissionAttribute,
-        final ActionListener<ClusterStateUpdateResponse> listener,
+        final ActionListener<PutDecommissionResponse> listener,
         ClusterState state
     ) {
         validateAwarenessAttribute(decommissionAttribute, getAwarenessAttributes());
@@ -203,7 +204,7 @@ public class DecommissionService {
      */
     private void registerDecommissionAttribute(
         final DecommissionAttribute decommissionAttribute,
-        final ActionListener<ClusterStateUpdateResponse> listener
+        final ActionListener<PutDecommissionResponse> listener
     ) {
         if (!transportService.getLocalNode().isClusterManagerNode()
             || nodeHasDecommissionedAttribute(transportService.getLocalNode(), decommissionAttribute)) {
@@ -266,7 +267,7 @@ public class DecommissionService {
                         .custom(DecommissionAttributeMetadata.TYPE);
                     assert decommissionAttribute.equals(decommissionAttributeMetadata.decommissionAttribute());
                     assert DecommissionStatus.DECOMMISSION_INIT.equals(decommissionAttributeMetadata.status());
-                    listener.onResponse(new ClusterStateUpdateResponse(true));
+                    listener.onResponse(new PutDecommissionResponse(true));
                     initiateGracefulDecommission();
                 }
             }
