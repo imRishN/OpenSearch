@@ -11,6 +11,7 @@ package org.opensearch.cluster.decommission;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.message.ParameterizedMessage;
+import org.opensearch.OpenSearchException;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.admin.cluster.configuration.AddVotingConfigExclusionsAction;
 import org.opensearch.action.admin.cluster.configuration.AddVotingConfigExclusionsRequest;
@@ -22,6 +23,7 @@ import org.opensearch.action.admin.cluster.decommission.awareness.put.PutDecommi
 import org.opensearch.cluster.ClusterChangedEvent;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.ClusterStateApplier;
+import org.opensearch.cluster.ClusterStateObserver;
 import org.opensearch.cluster.ClusterStateUpdateTask;
 import org.opensearch.cluster.NotClusterManagerException;
 import org.opensearch.cluster.ack.ClusterStateUpdateResponse;
@@ -36,6 +38,7 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.unit.TimeValue;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportException;
 import org.opensearch.transport.TransportResponseHandler;
@@ -210,12 +213,11 @@ public class DecommissionService implements ClusterStateApplier {
         final DecommissionAttribute decommissionAttribute,
         final ActionListener<PutDecommissionResponse> listener
     ) {
-        logger.info("Node is - " + transportService.getLocalNode());
         if (!transportService.getLocalNode().isClusterManagerNode()
             || nodeHasDecommissionedAttribute(transportService.getLocalNode(), decommissionAttribute))
         {
             throw new NotClusterManagerException(
-                "Node [" + transportService.getLocalNode() + "] not eligible to execute decommission request"
+                "node [" + transportService.getLocalNode().toString() + "] not eligible to execute decommission request"
             );
         }
         clusterService.submitStateUpdateTask(
@@ -255,7 +257,6 @@ public class DecommissionService implements ClusterStateApplier {
                             ),
                             e
                         );
-                        // Do we need a listener here as the transport request will be retried?
                     } else {
                         logger.error(
                             () -> new ParameterizedMessage(
@@ -264,7 +265,7 @@ public class DecommissionService implements ClusterStateApplier {
                             ),
                             e
                         );
-                        updateMetadataWithDecommissionStatus(DecommissionStatus.DECOMMISSION_FAILED);
+//                        updateMetadataWithDecommissionStatus(DecommissionStatus.DECOMMISSION_FAILED);
                         listener.onFailure(e);
                     }
                 }
@@ -274,19 +275,32 @@ public class DecommissionService implements ClusterStateApplier {
                     assert !newState.equals(oldState) : "no update in cluster state after initiating decommission request.";
                     // Do we attach a listener here with failed acknowledgement to the request?
                     listener.onResponse(new PutDecommissionResponse(true));
-                    initiateGracefulDecommission(newState);
+                    initiateGracefulDecommission();
                 }
             }
         );
     }
 
-    private void initiateGracefulDecommission(ClusterState clusterState) {
-        failDecommissionedNodes(clusterState);
+    private void initiateGracefulDecommission() {
+        ActionListener<ClusterStateUpdateResponse> listener = new ActionListener<ClusterStateUpdateResponse>() {
+            @Override
+            public void onResponse(ClusterStateUpdateResponse clusterStateUpdateResponse) {
+                failDecommissionedNodes(clusterService.state());
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+
+            }
+        };
+        updateMetadataWithDecommissionStatus(DecommissionStatus.DECOMMISSION_IN_PROGRESS, listener);
+        //TODO - code for graceful decommission
     }
 
     // To Do - Can we add a consumer here such that whenever this succeeds we call the next method in on cluster state processed
     private void updateMetadataWithDecommissionStatus(
-        DecommissionStatus decommissionStatus
+        DecommissionStatus decommissionStatus,
+        ActionListener<ClusterStateUpdateResponse> listener
     ) {
         clusterService.submitStateUpdateTask(
             decommissionStatus.status(),
@@ -315,6 +329,13 @@ public class DecommissionService implements ClusterStateApplier {
                         e
                     );
                 }
+
+                @Override
+                public void clusterStateProcessed(String source, ClusterState oldState, ClusterState newState) {
+                    listener.onResponse(new ClusterStateUpdateResponse(true));
+                }
+
+
             }
         );
     }
@@ -342,25 +363,73 @@ public class DecommissionService implements ClusterStateApplier {
 
     private void failDecommissionedNodes(ClusterState state) {
         DecommissionAttributeMetadata decommissionAttributeMetadata = state.metadata().custom(DecommissionAttributeMetadata.TYPE);
-        // TODO update the status check to DECOMMISSIONING once graceful decommission is implemented
-        assert decommissionAttributeMetadata.status().equals(DecommissionStatus.DECOMMISSION_INIT)
+        assert decommissionAttributeMetadata.status().equals(DecommissionStatus.DECOMMISSION_IN_PROGRESS)
             : "unexpected status encountered while decommissioning nodes";
         DecommissionAttribute decommissionAttribute = decommissionAttributeMetadata.decommissionAttribute();
-        List<DiscoveryNode> nodesToBeDecommissioned = new ArrayList<>();
+
+        decommissionHelper.handleNodesDecommissionRequest(
+            nodesWithDecommissionAttribute(state, decommissionAttribute),
+            "nodes-decommissioned"
+        );
+
+        final ClusterStateObserver observer = new ClusterStateObserver(
+            clusterService,
+            TimeValue.timeValueSeconds(30L),
+            logger,
+            threadPool.getThreadContext()
+        );
+
+        final Predicate<ClusterState> allDecommissionedNodesRemoved = clusterState -> {
+            List<DiscoveryNode> nodesWithDecommissionAttribute = nodesWithDecommissionAttribute(clusterState, decommissionAttribute);
+            return nodesWithDecommissionAttribute.size() == 0;
+        };
+        ActionListener<ClusterStateUpdateResponse> statusUpdateListener = new ActionListener<ClusterStateUpdateResponse>() {
+            @Override
+            public void onResponse(ClusterStateUpdateResponse clusterStateUpdateResponse) {
+                logger.info(
+                    "successfully updated decommission status"
+                );
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+
+            }
+        };
+
+        observer.waitForNextChange(new ClusterStateObserver.Listener() {
+            @Override
+            public void onNewClusterState(ClusterState state) {
+                clearVotingConfigAfterSuccessfulDecommission();
+                updateMetadataWithDecommissionStatus(DecommissionStatus.DECOMMISSION_SUCCESSFUL, statusUpdateListener);
+            }
+
+            @Override
+            public void onClusterServiceClose() {
+            }
+
+            @Override
+            public void onTimeout(TimeValue timeout) {
+                clearVotingConfigAfterSuccessfulDecommission();
+                updateMetadataWithDecommissionStatus(DecommissionStatus.DECOMMISSION_FAILED, statusUpdateListener);
+            }
+        }, allDecommissionedNodesRemoved, TimeValue.timeValueSeconds(30L));
+    }
+
+    private List<DiscoveryNode> nodesWithDecommissionAttribute(ClusterState clusterState, DecommissionAttribute decommissionAttribute) {
+        List<DiscoveryNode> nodesWithDecommissionAttribute = new ArrayList<>();
         final Predicate<DiscoveryNode> shouldRemoveNodePredicate = discoveryNode -> nodeHasDecommissionedAttribute(
             discoveryNode,
             decommissionAttribute
         );
-        Iterator<DiscoveryNode> nodesIter = state.nodes().getNodes().valuesIt();
+        Iterator<DiscoveryNode> nodesIter = clusterState.nodes().getNodes().valuesIt();
         while (nodesIter.hasNext()) {
             final DiscoveryNode node = nodesIter.next();
             if (shouldRemoveNodePredicate.test(node)) {
-                nodesToBeDecommissioned.add(node);
+                nodesWithDecommissionAttribute.add(node);
             }
         }
-        // TODO - check for response from decommission request and then clear voting config?
-        decommissionHelper.handleNodesDecommissionRequest(nodesToBeDecommissioned, "nodes-decommissioned");
-        clearVotingConfigAfterSuccessfulDecommission();
+        return  nodesWithDecommissionAttribute;
     }
 
     private static boolean assertIncrementalStatusOrFailed(DecommissionStatus oldStatus, DecommissionStatus newStatus) {
