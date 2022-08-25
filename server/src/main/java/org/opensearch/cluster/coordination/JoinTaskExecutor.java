@@ -480,9 +480,15 @@ public class JoinTaskExecutor implements ClusterStateTaskExecutor<JoinTaskExecut
         DecommissionAttributeMetadata decommissionAttributeMetadata = metadata.custom(DecommissionAttributeMetadata.TYPE);
         if (decommissionAttributeMetadata != null) {
             DecommissionAttribute decommissionAttribute = decommissionAttributeMetadata.decommissionAttribute();
-            if (decommissionAttribute != null && decommissionAttributeMetadata.status() != null) {
-                if(decommissionAttributeMetadata.status().equals(DecommissionStatus.DECOMMISSION_FAILED)) return;
-                if (node.getAttributes().get(decommissionAttribute.attributeName()).equals(decommissionAttribute.attributeValue())) {
+            DecommissionStatus status = decommissionAttributeMetadata.status();
+            if (decommissionAttribute != null && status != null) {
+                // We will let the node join the cluster if the current status is not IN_PROGRESS or SUCCESSFUL
+                if (node.getAttributes().get(decommissionAttribute.attributeName()).equals(decommissionAttribute.attributeValue())
+                    && (
+                        status.equals(DecommissionStatus.DECOMMISSION_IN_PROGRESS)
+                            || status.equals(DecommissionStatus.DECOMMISSION_SUCCESSFUL
+                        )
+                )) {
                     throw new NodeDecommissionedException(
                         "node [{}] has decommissioned attribute [{}].",
                         node.toString(),
