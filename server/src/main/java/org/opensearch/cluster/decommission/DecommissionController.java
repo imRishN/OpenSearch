@@ -11,7 +11,14 @@ package org.opensearch.cluster.decommission;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.message.ParameterizedMessage;
+import org.opensearch.OpenSearchTimeoutException;
 import org.opensearch.action.ActionListener;
+import org.opensearch.action.admin.cluster.configuration.AddVotingConfigExclusionsAction;
+import org.opensearch.action.admin.cluster.configuration.AddVotingConfigExclusionsRequest;
+import org.opensearch.action.admin.cluster.configuration.AddVotingConfigExclusionsResponse;
+import org.opensearch.action.admin.cluster.configuration.ClearVotingConfigExclusionsAction;
+import org.opensearch.action.admin.cluster.configuration.ClearVotingConfigExclusionsRequest;
+import org.opensearch.action.admin.cluster.configuration.ClearVotingConfigExclusionsResponse;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.ClusterStateObserver;
 import org.opensearch.cluster.ClusterStateTaskConfig;
@@ -25,17 +32,24 @@ import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.routing.allocation.AllocationService;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.Priority;
+import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.Transport;
+import org.opensearch.transport.TransportException;
+import org.opensearch.transport.TransportResponseHandler;
+import org.opensearch.transport.TransportService;
 
+import java.io.IOException;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
 
 /**
- * Helper executor class to remove list of nodes from the cluster
+ * Helper controller class to remove list of nodes from the cluster and update status
  *
  * @opensearch.internal
  */
@@ -46,23 +60,88 @@ public class DecommissionController {
 
     private final NodeRemovalClusterStateTaskExecutor nodeRemovalExecutor;
     private final ClusterService clusterService;
+    private final TransportService transportService;
     private final ThreadPool threadPool;
 
     DecommissionController(
         ClusterService clusterService,
+        TransportService transportService,
         AllocationService allocationService,
         ThreadPool threadPool
     ) {
         this.clusterService = clusterService;
+        this.transportService = transportService;
         this.nodeRemovalExecutor = new NodeRemovalClusterStateTaskExecutor(allocationService, logger);
         this.threadPool = threadPool;
+    }
+
+    public void excludeDecommissionedNodesFromVotingConfig(Set<String> nodes, ActionListener<Void> listener) {
+        transportService.sendRequest(
+            transportService.getLocalNode(),
+            AddVotingConfigExclusionsAction.NAME,
+            new AddVotingConfigExclusionsRequest(nodes.stream().toArray(String[] :: new)),
+            new TransportResponseHandler<AddVotingConfigExclusionsResponse>() {
+                @Override
+                public void handleResponse(AddVotingConfigExclusionsResponse response) {
+                    listener.onResponse(null);
+                }
+
+                @Override
+                public void handleException(TransportException exp) {
+                    listener.onFailure(exp);
+                }
+
+                @Override
+                public String executor() {
+                    return ThreadPool.Names.SAME;
+                }
+
+                @Override
+                public AddVotingConfigExclusionsResponse read(StreamInput in) throws IOException {
+                    return new AddVotingConfigExclusionsResponse(in);
+                }
+            }
+        );
+    }
+
+    public void clearVotingConfigExclusion(ActionListener<Void> listener) {
+        final ClearVotingConfigExclusionsRequest clearVotingConfigExclusionsRequest = new ClearVotingConfigExclusionsRequest();
+        clearVotingConfigExclusionsRequest.setWaitForRemoval(true);
+        transportService.sendRequest(
+            transportService.getLocalNode(),
+            ClearVotingConfigExclusionsAction.NAME,
+            clearVotingConfigExclusionsRequest,
+            new TransportResponseHandler<ClearVotingConfigExclusionsResponse>() {
+                @Override
+                public void handleResponse(ClearVotingConfigExclusionsResponse response) {
+                    logger.info("successfully cleared voting config after decommissioning");
+                    listener.onResponse(null);
+                }
+
+                @Override
+                public void handleException(TransportException exp) {
+                    logger.debug(new ParameterizedMessage("failure in clearing voting config exclusion after decommissioning"), exp);
+                    listener.onFailure(exp);
+                }
+
+                @Override
+                public String executor() {
+                    return ThreadPool.Names.SAME;
+                }
+
+                @Override
+                public ClearVotingConfigExclusionsResponse read(StreamInput in) throws IOException {
+                    return new ClearVotingConfigExclusionsResponse(in);
+                }
+            }
+        );
     }
 
     public void handleNodesDecommissionRequest(
         Set<DiscoveryNode> nodesToBeDecommissioned,
         String reason,
         TimeValue timeout,
-        ActionListener<ClusterStateUpdateResponse> nodesRemovedListener
+        ActionListener<Void> nodesRemovedListener
     ) {
         final Map<NodeRemovalClusterStateTaskExecutor.Task, ClusterStateTaskListener> nodesDecommissionTasks = new LinkedHashMap<>();
         nodesToBeDecommissioned.forEach(discoveryNode -> {
@@ -99,7 +178,7 @@ public class DecommissionController {
             @Override
             public void onNewClusterState(ClusterState state) {
                 logger.info("successfully removed all decommissioned nodes [{}] from the cluster", nodesToBeDecommissioned.toString());
-                nodesRemovedListener.onResponse(new ClusterStateUpdateResponse(true));
+                nodesRemovedListener.onResponse(null);
             }
 
             @Override
@@ -110,22 +189,26 @@ public class DecommissionController {
             @Override
             public void onTimeout(TimeValue timeout) {
                 logger.info("timed out while waiting for removal of decommissioned nodes");
-                nodesRemovedListener.onResponse(new ClusterStateUpdateResponse(false));
+                nodesRemovedListener.onFailure(
+                    new OpenSearchTimeoutException(
+                        "timed out waiting for removal of decommissioned nodes [{}] to take effect",
+                        nodesToBeDecommissioned.toString()
+                    )
+                );
             }
         }, allDecommissionedNodesRemovedPredicate);
     }
 
     public void updateMetadataWithDecommissionStatus(
         DecommissionStatus decommissionStatus,
-        ActionListener<ClusterStateUpdateResponse> listener
+        ActionListener<Void> listener
     ) {
         clusterService.submitStateUpdateTask(decommissionStatus.status(), new ClusterStateUpdateTask(Priority.URGENT) {
             @Override
-            public ClusterState execute(ClusterState currentState) throws Exception {
+            public ClusterState execute(ClusterState currentState) {
                 Metadata metadata = currentState.metadata();
                 DecommissionAttributeMetadata decommissionAttributeMetadata = metadata.custom(DecommissionAttributeMetadata.TYPE);
-                assert decommissionAttributeMetadata != null && decommissionAttributeMetadata.decommissionAttribute() != null
-                    : "failed to update status for decommission. metadata doesn't exist or invalid";
+                assert decommissionAttributeMetadata != null && decommissionAttributeMetadata.decommissionAttribute() != null;
                 assert assertIncrementalStatusOrFailed(decommissionAttributeMetadata.status(), decommissionStatus);
                 Metadata.Builder mdBuilder = Metadata.builder(metadata);
                 DecommissionAttributeMetadata newMetadata = decommissionAttributeMetadata.withUpdatedStatus(decommissionStatus);
@@ -135,19 +218,20 @@ public class DecommissionController {
 
             @Override
             public void onFailure(String source, Exception e) {
-                logger.error(() -> new ParameterizedMessage("failed to mark status as [{}]", decommissionStatus.status()), e);
+                listener.onFailure(e);
             }
 
             @Override
             public void clusterStateProcessed(String source, ClusterState oldState, ClusterState newState) {
-                listener.onResponse(new ClusterStateUpdateResponse(true));
+                DecommissionAttributeMetadata decommissionAttributeMetadata = newState.metadata().custom(DecommissionAttributeMetadata.TYPE);
+                assert decommissionAttributeMetadata.status().equals(decommissionStatus);
+                listener.onResponse(null);
             }
-
         });
     }
 
     private static boolean assertIncrementalStatusOrFailed(DecommissionStatus oldStatus, DecommissionStatus newStatus) {
-        if (oldStatus == null || newStatus.equals(DecommissionStatus.DECOMMISSION_FAILED)) return true;
+        if (newStatus.equals(DecommissionStatus.DECOMMISSION_FAILED)) return true;
         else if (newStatus.equals(DecommissionStatus.DECOMMISSION_SUCCESSFUL)) {
             return oldStatus.equals(DecommissionStatus.DECOMMISSION_IN_PROGRESS);
         } else if (newStatus.equals(DecommissionStatus.DECOMMISSION_IN_PROGRESS)) {
