@@ -243,8 +243,7 @@ public class Coordinator extends AbstractLifecycleComponent implements Discovery
             this.onJoinValidators,
             rerouteService,
             nodeHealthService,
-            this.peerFinder::onDecommission,
-            this.peerFinder::onRecommission
+            peerFinder.nodeCommissionedListener()
         );
         this.publicationHandler = new PublicationTransportHandler(
             transportService,

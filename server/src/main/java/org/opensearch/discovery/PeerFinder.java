@@ -138,6 +138,22 @@ public abstract class PeerFinder {
         );
     }
 
+    public ActionListener<Void> nodeCommissionedListener() {
+        return new ActionListener<Void>() {
+            @Override
+            public void onResponse(Void unused) {
+                logger.info("setting findPeersInterval to [{}], due to recommissioning", findPeersInterval);
+                findPeersInterval = DISCOVERY_FIND_PEERS_INTERVAL_SETTING.get(settings);
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                logger.info("setting findPeersInterval to [{}], due to decommissioning", findPeersInterval);
+                findPeersInterval = DISCOVERY_FIND_PEERS_INTERVAL_DURING_DECOMMISSION_SETTING.get(settings);
+            }
+        };
+    }
+
     public void activate(final DiscoveryNodes lastAcceptedNodes) {
         logger.trace("activating with {}", lastAcceptedNodes);
 
@@ -164,16 +180,6 @@ public abstract class PeerFinder {
         if (peersRemoved) {
             onFoundPeersUpdated();
         }
-    }
-
-    public void onDecommission() {
-        findPeersInterval = DISCOVERY_FIND_PEERS_INTERVAL_DURING_DECOMMISSION_SETTING.get(settings);
-        logger.info("setting findPeersInterval to [{}], due to decommissioning", findPeersInterval);
-    }
-
-    public void onRecommission() {
-        findPeersInterval = DISCOVERY_FIND_PEERS_INTERVAL_SETTING.get(settings);
-        logger.info("setting findPeersInterval to [{}], due to recommissioning", findPeersInterval);
     }
 
     // exposed to subclasses for testing

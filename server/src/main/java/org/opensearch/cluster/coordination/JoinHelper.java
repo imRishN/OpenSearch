@@ -116,8 +116,7 @@ public class JoinHelper {
     private final NodeHealthService nodeHealthService;
 
     public boolean isDecommissioned;
-    private Runnable onDecommission;
-    private Runnable onRecommission;
+    private final ActionListener<Void> nodeCommissionedListener;
 
     private final Set<Tuple<DiscoveryNode, JoinRequest>> pendingOutgoingJoins = Collections.synchronizedSet(new HashSet<>());
 
@@ -137,13 +136,13 @@ public class JoinHelper {
         Collection<BiConsumer<DiscoveryNode, ClusterState>> joinValidators,
         RerouteService rerouteService,
         NodeHealthService nodeHealthService,
-        Runnable onDecommission,
-        Runnable onRecommission
+        ActionListener<Void> nodeCommissionedListener
     ) {
         this.clusterManagerService = clusterManagerService;
         this.transportService = transportService;
         this.nodeHealthService = nodeHealthService;
         this.joinTimeout = JOIN_TIMEOUT_SETTING.get(settings);
+        this.nodeCommissionedListener = nodeCommissionedListener;
         this.joinTaskExecutorGenerator = () -> new JoinTaskExecutor(settings, allocationService, logger, rerouteService, transportService) {
 
             private final long term = currentTermSupplier.getAsLong();
@@ -353,7 +352,7 @@ public class JoinHelper {
                         onCompletion.run();
                         if (isDecommissioned) {
                             isDecommissioned = false;
-                            onRecommission.run();
+                            nodeCommissionedListener.onResponse(null);
                         }
                     }
 
@@ -364,7 +363,7 @@ public class JoinHelper {
                             logger.info("local node is decommissioned. Will not be able to join the cluster");
                             if (!isDecommissioned) {
                                 isDecommissioned = true;
-                                onDecommission.run();
+                                nodeCommissionedListener.onFailure(exp);
                             }
                         }
                         logger.info(() -> new ParameterizedMessage("failed to join {} with {}", destination, joinRequest), exp);
