@@ -69,6 +69,7 @@ import static java.util.Collections.singletonMap;
 import static java.util.Collections.unmodifiableMap;
 import static org.opensearch.Version.V_2_1_0;
 import static org.opensearch.Version.V_2_3_0;
+import static org.opensearch.Version.V_3_0_0;
 import static org.opensearch.cluster.metadata.IndexMetadata.INDEX_UUID_NA_VALUE;
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureFieldName;
@@ -1603,16 +1604,22 @@ public class OpenSearchException extends RuntimeException implements ToXContentF
             161,
             V_2_1_0
         ),
-        DECOMMISSION_FAILED_EXCEPTION(
-            org.opensearch.cluster.decommission.DecommissionFailedException.class,
-            org.opensearch.cluster.decommission.DecommissionFailedException::new,
+        PRIMARY_SHARD_CLOSED_EXCEPTION(
+            org.opensearch.index.shard.PrimaryShardClosedException.class,
+            org.opensearch.index.shard.PrimaryShardClosedException::new,
             162,
+            V_3_0_0
+        ),
+        DECOMMISSIONING_FAILED_EXCEPTION(
+            org.opensearch.cluster.decommission.DecommissioningFailedException.class,
+            org.opensearch.cluster.decommission.DecommissioningFailedException::new,
+            163,
             V_2_3_0
         ),
         NODE_DECOMMISSIONED_EXCEPTION(
             org.opensearch.cluster.decommission.NodeDecommissionedException.class,
             org.opensearch.cluster.decommission.NodeDecommissionedException::new,
-            163,
+            164,
             V_2_3_0
         );
 

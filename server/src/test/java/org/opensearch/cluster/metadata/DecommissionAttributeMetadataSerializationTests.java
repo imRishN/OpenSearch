@@ -11,6 +11,7 @@ package org.opensearch.cluster.metadata;
 import org.opensearch.cluster.ClusterModule;
 import org.opensearch.cluster.Diff;
 import org.opensearch.cluster.decommission.DecommissionAttribute;
+import org.opensearch.cluster.decommission.DecommissionAttributeMetadata;
 import org.opensearch.cluster.decommission.DecommissionStatus;
 import org.opensearch.common.io.stream.NamedWriteableRegistry;
 import org.opensearch.common.io.stream.Writeable;
@@ -53,13 +54,10 @@ public class DecommissionAttributeMetadataSerializationTests extends AbstractDif
         if (randomBoolean()) {
             attributeName = randomAlphaOfLength(6);
         }
-        if(randomBoolean()) {
+        if (randomBoolean()) {
             attributeValue = randomAlphaOfLength(6);
         }
-        return new DecommissionAttributeMetadata(
-            new DecommissionAttribute(attributeName, attributeValue),
-            decommissionStatus
-        );
+        return new DecommissionAttributeMetadata(new DecommissionAttribute(attributeName, attributeValue), decommissionStatus);
     }
 
     @Override

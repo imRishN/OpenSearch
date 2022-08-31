@@ -476,7 +476,7 @@ public class JoinTaskExecutor implements ClusterStateTaskExecutor<JoinTaskExecut
         }
     }
 
-    public static void ensureNodeNotDecommissioned(DiscoveryNode node, Metadata metadata) {
+    public static void ensureNodeCommissioned(DiscoveryNode node, Metadata metadata) {
         DecommissionAttributeMetadata decommissionAttributeMetadata = metadata.custom(DecommissionAttributeMetadata.TYPE);
         if (decommissionAttributeMetadata != null) {
             DecommissionAttribute decommissionAttribute = decommissionAttributeMetadata.decommissionAttribute();
@@ -484,11 +484,8 @@ public class JoinTaskExecutor implements ClusterStateTaskExecutor<JoinTaskExecut
             if (decommissionAttribute != null && status != null) {
                 // We will let the node join the cluster if the current status is not IN_PROGRESS or SUCCESSFUL
                 if (node.getAttributes().get(decommissionAttribute.attributeName()).equals(decommissionAttribute.attributeValue())
-                    && (
-                        status.equals(DecommissionStatus.DECOMMISSION_IN_PROGRESS)
-                            || status.equals(DecommissionStatus.DECOMMISSION_SUCCESSFUL
-                        )
-                )) {
+                    && (status.equals(DecommissionStatus.DECOMMISSION_IN_PROGRESS)
+                        || status.equals(DecommissionStatus.DECOMMISSION_SUCCESSFUL))) {
                     throw new NodeDecommissionedException(
                         "node [{}] has decommissioned attribute [{}].",
                         node.toString(),
@@ -506,7 +503,7 @@ public class JoinTaskExecutor implements ClusterStateTaskExecutor<JoinTaskExecut
         validators.add((node, state) -> {
             ensureNodesCompatibility(node.getVersion(), state.getNodes());
             ensureIndexCompatibility(node.getVersion(), state.getMetadata());
-            ensureNodeNotDecommissioned(node, state.getMetadata());
+            ensureNodeCommissioned(node, state.getMetadata());
         });
         validators.addAll(onJoinValidators);
         return Collections.unmodifiableCollection(validators);

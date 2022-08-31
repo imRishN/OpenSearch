@@ -37,10 +37,9 @@ import org.opensearch.cluster.ClusterName;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.ClusterStateTaskExecutor;
 import org.opensearch.cluster.decommission.DecommissionAttribute;
-import org.opensearch.cluster.decommission.DecommissionFailedException;
+import org.opensearch.cluster.decommission.DecommissionAttributeMetadata;
 import org.opensearch.cluster.decommission.DecommissionStatus;
 import org.opensearch.cluster.decommission.NodeDecommissionedException;
-import org.opensearch.cluster.metadata.DecommissionAttributeMetadata;
 import org.opensearch.cluster.metadata.IndexMetadata;
 import org.opensearch.cluster.metadata.Metadata;
 import org.opensearch.cluster.node.DiscoveryNode;
@@ -58,7 +57,6 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 
-import static java.util.Collections.emptyMap;
 import static org.hamcrest.Matchers.is;
 import static org.opensearch.test.VersionUtils.allVersions;
 import static org.opensearch.test.VersionUtils.maxCompatibleVersion;
@@ -231,7 +229,7 @@ public class JoinTaskExecutorTests extends OpenSearchTestCase {
         Metadata.Builder metaBuilder = Metadata.builder();
         Metadata metadata = metaBuilder.build();
         DiscoveryNode discoveryNode = newDiscoveryNode(Collections.singletonMap("zone", "zone-2"));
-        JoinTaskExecutor.ensureNodeNotDecommissioned(discoveryNode, metadata);
+        JoinTaskExecutor.ensureNodeCommissioned(discoveryNode, metadata);
     }
 
     public void testPreventJoinClusterWithDecommission() {
@@ -250,10 +248,7 @@ public class JoinTaskExecutorTests extends OpenSearchTestCase {
         Metadata metadata = metaBuilder.build();
 
         DiscoveryNode discoveryNode = newDiscoveryNode(Collections.singletonMap("zone", "zone-1"));
-        expectThrows(
-            NodeDecommissionedException.class,
-            () -> JoinTaskExecutor.ensureNodeNotDecommissioned(discoveryNode, metadata)
-        );
+        expectThrows(NodeDecommissionedException.class, () -> JoinTaskExecutor.ensureNodeCommissioned(discoveryNode, metadata));
     }
 
     public void testJoinClusterWithDifferentDecommission() {
@@ -269,7 +264,7 @@ public class JoinTaskExecutorTests extends OpenSearchTestCase {
         Metadata metadata = metaBuilder.build();
 
         DiscoveryNode discoveryNode = newDiscoveryNode(Collections.singletonMap("zone", "zone-2"));
-        JoinTaskExecutor.ensureNodeNotDecommissioned(discoveryNode, metadata);
+        JoinTaskExecutor.ensureNodeCommissioned(discoveryNode, metadata);
     }
 
     public void testJoinClusterWithDecommissionFailedOrInitOrRecommission() {
@@ -289,7 +284,7 @@ public class JoinTaskExecutorTests extends OpenSearchTestCase {
         Metadata metadata = metaBuilder.build();
 
         DiscoveryNode discoveryNode = newDiscoveryNode(Collections.singletonMap("zone", "zone-1"));
-        JoinTaskExecutor.ensureNodeNotDecommissioned(discoveryNode, metadata);
+        JoinTaskExecutor.ensureNodeCommissioned(discoveryNode, metadata);
     }
 
     private DiscoveryNode newDiscoveryNode(Map<String, String> attributes) {
