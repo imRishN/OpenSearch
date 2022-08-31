@@ -33,6 +33,7 @@ package org.opensearch.cluster.coordination;
 
 import org.apache.logging.log4j.Level;
 import org.opensearch.Version;
+import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionListenerResponseHandler;
 import org.opensearch.action.support.PlainActionFuture;
 import org.opensearch.cluster.ClusterName;
@@ -55,6 +56,7 @@ import java.util.Collections;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.mockito.Mockito.mock;
 import static org.opensearch.monitor.StatusInfo.Status.HEALTHY;
 import static org.opensearch.monitor.StatusInfo.Status.UNHEALTHY;
 import static org.opensearch.node.Node.NODE_NAME_SETTING;
@@ -91,8 +93,7 @@ public class JoinHelperTests extends OpenSearchTestCase {
             Collections.emptyList(),
             (s, p, r) -> {},
             () -> new StatusInfo(HEALTHY, "info"),
-            ()-> {},
-            () -> {}
+            mock(ActionListener.class)
         );
         transportService.start();
 
@@ -233,8 +234,7 @@ public class JoinHelperTests extends OpenSearchTestCase {
             Collections.emptyList(),
             (s, p, r) -> {},
             null,
-            () -> {},
-            () -> {}
+            mock(ActionListener.class)
         ); // registers request handler
         transportService.start();
         transportService.acceptIncomingRequests();
@@ -289,8 +289,7 @@ public class JoinHelperTests extends OpenSearchTestCase {
             Collections.emptyList(),
             (s, p, r) -> {},
             () -> nodeHealthServiceStatus.get(),
-            () -> {},
-            () -> {}
+            mock(ActionListener.class)
         );
         transportService.start();
 
