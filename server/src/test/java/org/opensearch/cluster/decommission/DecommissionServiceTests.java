@@ -13,6 +13,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.opensearch.Version;
 import org.opensearch.action.ActionListener;
+import org.opensearch.action.admin.cluster.decommission.awareness.put.PutDecommissionResponse;
 import org.opensearch.cluster.ClusterName;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.ack.ClusterStateUpdateResponse;
@@ -114,7 +115,7 @@ public class DecommissionServiceTests extends OpenSearchTestCase {
     @SuppressWarnings("unchecked")
     public void testDecommissioningNotInitiatedForInvalidAttributeName() {
         DecommissionAttribute decommissionAttribute = new DecommissionAttribute("rack", "rack-a");
-        ActionListener<ClusterStateUpdateResponse> listener = mock(ActionListener.class);
+        ActionListener<PutDecommissionResponse> listener = mock(ActionListener.class);
         DecommissioningFailedException e = expectThrows(
             DecommissioningFailedException.class,
             () -> { decommissionService.initiateAttributeDecommissioning(decommissionAttribute, listener, clusterService.state()); }
@@ -125,7 +126,7 @@ public class DecommissionServiceTests extends OpenSearchTestCase {
     @SuppressWarnings("unchecked")
     public void testDecommissioningNotInitiatedForInvalidAttributeValue() {
         DecommissionAttribute decommissionAttribute = new DecommissionAttribute("zone", "random");
-        ActionListener<ClusterStateUpdateResponse> listener = mock(ActionListener.class);
+        ActionListener<PutDecommissionResponse> listener = mock(ActionListener.class);
         DecommissioningFailedException e = expectThrows(
             DecommissioningFailedException.class,
             () -> { decommissionService.initiateAttributeDecommissioning(decommissionAttribute, listener, clusterService.state()); }
@@ -151,7 +152,7 @@ public class DecommissionServiceTests extends OpenSearchTestCase {
                 Metadata.builder(clusterService.state().metadata()).putCustom(DecommissionAttributeMetadata.TYPE, oldMetadata).build()
             )
         );
-        ActionListener<ClusterStateUpdateResponse> listener = mock(ActionListener.class);
+        ActionListener<PutDecommissionResponse> listener = mock(ActionListener.class);
         DecommissioningFailedException e = expectThrows(
             DecommissioningFailedException.class,
             () -> {
