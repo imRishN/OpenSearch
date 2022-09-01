@@ -15,6 +15,11 @@ import org.opensearch.common.io.stream.Writeable;
 import java.io.IOException;
 import java.util.Objects;
 
+/**
+ * {@link DecommissionAttribute} encapsulates information about decommissioned node attribute like attribute name, attribute value.
+ *
+ * @opensearch.internal
+ */
 public final class DecommissionAttribute implements Writeable {
     private final String attributeName;
     private final String attributeValue;

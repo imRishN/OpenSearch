@@ -8,6 +8,9 @@
 
 package org.opensearch.cluster.decommission;
 
+/**
+ * An enumeration of the states during decommissioning and recommissioning.
+ */
 public enum DecommissionStatus {
     /**
      * Decommission process is initiated
