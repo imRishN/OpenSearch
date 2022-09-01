@@ -1439,6 +1439,11 @@ public class Coordinator extends AbstractLifecycleComponent implements Discovery
             public void run() {
                 synchronized (mutex) {
                     if (mode == Mode.CANDIDATE) {
+                        if(peerFinder.localNodeDecommissioned()) {
+                            logger.debug("skip prevoting as local node is decommissioned");
+                            return;
+                        }
+
                         final ClusterState lastAcceptedState = coordinationState.get().getLastAcceptedState();
 
                         if (localNodeMayWinElection(lastAcceptedState) == false) {
