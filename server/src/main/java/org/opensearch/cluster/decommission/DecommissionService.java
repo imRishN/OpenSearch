@@ -16,13 +16,12 @@ import org.opensearch.action.admin.cluster.decommission.awareness.put.PutDecommi
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.ClusterStateUpdateTask;
 import org.opensearch.cluster.NotClusterManagerException;
-import org.opensearch.cluster.ack.ClusterStateUpdateResponse;
 import org.opensearch.cluster.coordination.CoordinationMetadata;
 import org.opensearch.cluster.metadata.DecommissionAttributeMetadata;
+import org.opensearch.cluster.coordination.ClusterBootstrapService;
 import org.opensearch.cluster.metadata.Metadata;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.routing.allocation.AllocationService;
-import org.opensearch.cluster.routing.allocation.decider.AwarenessAllocationDecider;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.Priority;
 import org.opensearch.common.inject.Inject;
@@ -120,15 +119,22 @@ public class DecommissionService {
         // action
         validateAwarenessAttribute(decommissionAttribute, awarenessAttributes, forcedAwarenessAttributes);
 
+        Set<DiscoveryNode> clusterManagerNodesToBeDecommissioned = nodesWithDecommissionAttribute(state, decommissionAttribute, true);
+        ensureNoQuorumLossDueToDecommissioning(
+            decommissionAttribute,
+            clusterManagerNodesToBeDecommissioned,
+            state.getLastAcceptedConfiguration()
+        );
+
         DecommissionAttributeMetadata decommissionAttributeMetadata = state.metadata().custom(DecommissionAttributeMetadata.TYPE);
         // validates that there's no inflight decommissioning or already executed decommission in place
         ensureNoAwarenessAttributeDecommissioned(decommissionAttributeMetadata, decommissionAttribute);
 
         logger.info("initiating awareness attribute [{}] decommissioning", decommissionAttribute.toString());
 
-        // remove all decommissioned cluster manager eligible nodes from voting config
+        // remove all 'to-be-decommissioned' cluster manager eligible nodes from voting config
         // The method ensures that we don't exclude same nodes multiple times
-        excludeDecommissionedClusterManagerNodesFromVotingConfig(decommissionAttribute);
+        excludeDecommissionedClusterManagerNodesFromVotingConfig(clusterManagerNodesToBeDecommissioned);
 
         // explicitly throwing NotClusterManagerException as we can certainly say the local cluster manager node will
         // be abdicated and soon will no longer be cluster manager.
@@ -144,12 +150,7 @@ public class DecommissionService {
         }
     }
 
-    private void excludeDecommissionedClusterManagerNodesFromVotingConfig(DecommissionAttribute decommissionAttribute) {
-        Set<DiscoveryNode> clusterManagerNodesToBeDecommissioned = nodesWithDecommissionAttribute(
-            clusterService.state(),
-            decommissionAttribute,
-            true
-        );
+    private void excludeDecommissionedClusterManagerNodesFromVotingConfig(Set<DiscoveryNode> clusterManagerNodesToBeDecommissioned) {
         Set<String> clusterManagerNodesNameToBeDecommissioned = clusterManagerNodesToBeDecommissioned.stream()
             .map(DiscoveryNode::getName)
             .collect(Collectors.toSet());
@@ -410,6 +411,25 @@ public class DecommissionService {
             throw new DecommissioningFailedException(
                 decommissionAttribute,
                 "one awareness attribute already decommissioned, recommission before triggering another decommission"
+            );
+        }
+    }
+
+    private static void ensureNoQuorumLossDueToDecommissioning(
+        DecommissionAttribute decommissionAttribute,
+        Set<DiscoveryNode> clusterManagerNodesToBeDecommissioned,
+        CoordinationMetadata.VotingConfiguration votingConfiguration
+    ) {
+        final Set<String> nodesInVotingConfig = votingConfiguration.getNodeIds();
+        assert nodesInVotingConfig.isEmpty() == false;
+        final int requiredNodes = nodesInVotingConfig.size() / 2 + 1;
+        final Set<String> realNodeIds = new HashSet<>(nodesInVotingConfig);
+        realNodeIds.removeIf(ClusterBootstrapService::isBootstrapPlaceholder);
+        clusterManagerNodesToBeDecommissioned.removeIf(b -> !nodesInVotingConfig.contains(b.getId()));
+        if (realNodeIds.size() - clusterManagerNodesToBeDecommissioned.size() < requiredNodes) {
+            throw new DecommissioningFailedException(
+                decommissionAttribute,
+                "cannot proceed with decommission request. Cluster might go into quorum loss"
             );
         }
     }
