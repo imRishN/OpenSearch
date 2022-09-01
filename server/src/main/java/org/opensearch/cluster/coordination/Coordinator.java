@@ -71,6 +71,7 @@ import org.opensearch.common.settings.Setting;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.transport.TransportAddress;
 import org.opensearch.common.unit.TimeValue;
+import org.opensearch.common.util.FeatureFlags;
 import org.opensearch.common.util.concurrent.OpenSearchExecutors;
 import org.opensearch.common.util.concurrent.ListenableFuture;
 import org.opensearch.common.xcontent.XContentHelper;
@@ -1439,7 +1440,7 @@ public class Coordinator extends AbstractLifecycleComponent implements Discovery
             public void run() {
                 synchronized (mutex) {
                     if (mode == Mode.CANDIDATE) {
-                        if(peerFinder.localNodeDecommissioned()) {
+                        if(peerFinder.localNodeDecommissioned() && FeatureFlags.isEnabled(FeatureFlags.AWARENESS_ATTRIBUTE_DECOMMISSION)) {
                             logger.debug("skip prevoting as local node is decommissioned");
                             return;
                         }

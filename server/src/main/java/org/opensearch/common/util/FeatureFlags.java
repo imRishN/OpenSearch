@@ -30,6 +30,12 @@ public class FeatureFlags {
     public static final String REMOTE_STORE = "opensearch.experimental.feature.remote_store.enabled";
 
     /**
+     * Gates the visibility of awareness attribute decommission api. When disabled, the decommissioned nodes will be able to join the cluster back
+     * And any core functionality change will be reverted
+     */
+    public static final String AWARENESS_ATTRIBUTE_DECOMMISSION = "opensearch.feature.awareness_attribute_decommission.enabled";
+
+    /**
      * Used to test feature flags whose values are expected to be booleans.
      * This method returns true if the value is "true" (case-insensitive),
      * and false otherwise.

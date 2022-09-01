@@ -51,6 +51,7 @@ import org.opensearch.cluster.routing.RerouteService;
 import org.opensearch.cluster.routing.allocation.AllocationService;
 import org.opensearch.common.Priority;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.FeatureFlags;
 import org.opensearch.persistent.PersistentTasksCustomMetadata;
 import org.opensearch.transport.TransportService;
 
@@ -503,7 +504,10 @@ public class JoinTaskExecutor implements ClusterStateTaskExecutor<JoinTaskExecut
         validators.add((node, state) -> {
             ensureNodesCompatibility(node.getVersion(), state.getNodes());
             ensureIndexCompatibility(node.getVersion(), state.getMetadata());
-            ensureNodeCommissioned(node, state.getMetadata());
+            // ensure node commissioned or not only when the feature flag is set to true
+            if(FeatureFlags.isEnabled(FeatureFlags.AWARENESS_ATTRIBUTE_DECOMMISSION)) {
+                ensureNodeCommissioned(node, state.getMetadata());
+            }
         });
         validators.addAll(onJoinValidators);
         return Collections.unmodifiableCollection(validators);

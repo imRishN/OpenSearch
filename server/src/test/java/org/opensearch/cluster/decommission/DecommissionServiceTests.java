@@ -185,7 +185,7 @@ public class DecommissionServiceTests extends OpenSearchTestCase {
         // shrink voting config
         state = setNodesInVotingConfig(state, state.nodes().get("node1"), state.nodes().get("node11"));
         setState(clusterService, state);
-        ActionListener<ClusterStateUpdateResponse> listener = mock(ActionListener.class);
+        ActionListener<PutDecommissionResponse> listener = mock(ActionListener.class);
         DecommissioningFailedException e = expectThrows(
             DecommissioningFailedException.class,
             () -> {

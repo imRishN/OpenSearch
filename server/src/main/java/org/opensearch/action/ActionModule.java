@@ -873,7 +873,13 @@ public class ActionModule extends AbstractModule {
             }
         }
         registerHandler.accept(new RestCatAction(catActions));
-        registerHandler.accept(new RestPutDecommissionAction());
+
+        // Awareness attribute decommission APIs
+        if (FeatureFlags.isEnabled(FeatureFlags.AWARENESS_ATTRIBUTE_DECOMMISSION)) {
+            registerHandler.accept(new RestPutDecommissionAction());
+        }
+        // We will not put GET/DELETE decommission APIs behind feature flag as they are safe.
+        // For recovery from decommission, DELETE decommission should be the first attempt
         registerHandler.accept(new RestGetDecommissionAction());
 
         // Remote Store APIs

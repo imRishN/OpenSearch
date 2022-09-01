@@ -22,6 +22,7 @@ public class FeatureFlagTests extends OpenSearchTestCase {
     public static void enableFeature() {
         AccessController.doPrivileged((PrivilegedAction<String>) () -> System.setProperty(FeatureFlags.REPLICATION_TYPE, "true"));
         AccessController.doPrivileged((PrivilegedAction<String>) () -> System.setProperty(FeatureFlags.REMOTE_STORE, "true"));
+        AccessController.doPrivileged((PrivilegedAction<String>) () -> System.setProperty(FeatureFlags.AWARENESS_ATTRIBUTE_DECOMMISSION, "true"));
     }
 
     public void testReplicationTypeFeatureFlag() {
@@ -46,5 +47,11 @@ public class FeatureFlagTests extends OpenSearchTestCase {
         String remoteStoreFlag = FeatureFlags.REMOTE_STORE;
         assertNotNull(System.getProperty(remoteStoreFlag));
         assertTrue(FeatureFlags.isEnabled(remoteStoreFlag));
+    }
+
+    public void testDecommissionFeatureFlag() {
+        String awarenessAttributeDecommissionFlag = FeatureFlags.AWARENESS_ATTRIBUTE_DECOMMISSION;
+        assertNotNull(System.getProperty(awarenessAttributeDecommissionFlag));
+        assertTrue(FeatureFlags.isEnabled(awarenessAttributeDecommissionFlag));
     }
 }
