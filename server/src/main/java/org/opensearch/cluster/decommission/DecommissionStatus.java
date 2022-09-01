@@ -29,6 +29,10 @@ public enum DecommissionStatus {
      */
     DECOMMISSION_FAILED("decommission_failed"),
     /**
+     * Decommission feature flag is off
+     */
+    DECOMMISSION_FEATURE_FLAG_OFF("decommission_feature_flag_off"),
+    /**
      * Recommission request received, recommissioning process has started
      */
     RECOMMISSION_IN_PROGRESS("recommission_in_progress"),
@@ -70,6 +74,8 @@ public enum DecommissionStatus {
             return DECOMMISSION_SUCCESSFUL;
         } else if (status.equals(DECOMMISSION_FAILED.status())) {
             return DECOMMISSION_FAILED;
+        } else if (status.equals(DECOMMISSION_FEATURE_FLAG_OFF.status())) {
+            return DECOMMISSION_FEATURE_FLAG_OFF;
         } else if (status.equals(RECOMMISSION_IN_PROGRESS.status())) {
             return RECOMMISSION_IN_PROGRESS;
         } else if (status.equals(RECOMMISSION_FAILED.status())) {

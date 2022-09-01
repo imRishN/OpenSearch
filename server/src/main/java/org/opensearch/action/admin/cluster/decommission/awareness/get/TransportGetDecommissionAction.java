@@ -22,6 +22,7 @@ import org.opensearch.cluster.metadata.Metadata;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.io.stream.StreamInput;
+import org.opensearch.common.util.FeatureFlags;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
@@ -68,7 +69,12 @@ public class TransportGetDecommissionAction extends TransportClusterManagerNodeR
          DecommissionAttributeMetadata decommissionedAttributes = metadata.custom(DecommissionAttributeMetadata.TYPE);
         // TODO - update once service layer changes are merged
         if (decommissionedAttributes!=null) {
-            listener.onResponse(new GetDecommissionResponse(decommissionedAttributes.decommissionAttribute(), decommissionedAttributes.status()));
+            DecommissionStatus status = decommissionedAttributes.status();
+            if (!FeatureFlags.isEnabled(FeatureFlags.AWARENESS_ATTRIBUTE_DECOMMISSION))
+            {
+                status = DecommissionStatus.DECOMMISSION_FEATURE_FLAG_OFF;
+            }
+            listener.onResponse(new GetDecommissionResponse(decommissionedAttributes.decommissionAttribute(), status));
         }
         else {
             listener.onResponse(new GetDecommissionResponse());
