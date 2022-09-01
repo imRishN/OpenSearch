@@ -110,6 +110,7 @@ public abstract class PeerFinder {
 
     private volatile long currentTerm;
     private boolean active;
+    private boolean localNodeDecommissioned = false;
     private DiscoveryNodes lastAcceptedNodes;
     private final Map<TransportAddress, Peer> peersByAddress = new LinkedHashMap<>();
     private Optional<DiscoveryNode> leader = Optional.empty();
@@ -143,15 +144,25 @@ public abstract class PeerFinder {
             @Override
             public void onResponse(Void unused) {
                 logger.info("setting findPeersInterval to [{}], due to recommissioning", findPeersInterval);
+                assert localNodeDecommissioned; // TODO: Do we need this?
+                localNodeDecommissioned = false;
                 findPeersInterval = DISCOVERY_FIND_PEERS_INTERVAL_SETTING.get(settings);
+
             }
 
             @Override
             public void onFailure(Exception e) {
-                logger.info("setting findPeersInterval to [{}], due to decommissioning", findPeersInterval);
+                logger.info("setting findPeersInterval to [{}], due to decommissioning",
+                    DISCOVERY_FIND_PEERS_INTERVAL_DURING_DECOMMISSION_SETTING.get(settings));
+                assert !localNodeDecommissioned;
+                localNodeDecommissioned = true;
                 findPeersInterval = DISCOVERY_FIND_PEERS_INTERVAL_DURING_DECOMMISSION_SETTING.get(settings);
             }
         };
+    }
+
+    public boolean localNodeDecommissioned() {
+        return localNodeDecommissioned;
     }
 
     public void activate(final DiscoveryNodes lastAcceptedNodes) {
