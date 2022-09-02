@@ -199,6 +199,23 @@ public class DecommissionServiceTests extends OpenSearchTestCase {
         assertThat(e.getMessage(), Matchers.endsWith("cannot proceed with decommission request. Cluster might go into quorum loss"));
     }
 
+    public void testClearDecommissionAttribute() {
+        final ClusterSettings settings = new ClusterSettings(Settings.EMPTY, ClusterSettings.BUILT_IN_CLUSTER_SETTINGS);
+        DecommissionAttribute decommissionAttribute = new DecommissionAttribute("zone", "zone-2");
+        org.opensearch.cluster.metadata.DecommissionAttributeMetadata decommissionAttributeMetadata =
+                new org.opensearch.cluster.metadata.DecommissionAttributeMetadata(decommissionAttribute, DecommissionStatus.DECOMMISSION_SUCCESSFUL);
+        ClusterState clusterState = ClusterState.builder(new ClusterName("test"))
+                .metadata(Metadata.builder()
+                        .putCustom(org.opensearch.cluster.metadata.DecommissionAttributeMetadata.TYPE, decommissionAttributeMetadata).build())
+                .build();
+
+        final ClusterState newClusterState = this.decommissionService.deleteDecommissionAttribute(clusterState);
+        org.opensearch.cluster.metadata.DecommissionAttributeMetadata metadata = newClusterState.metadata().custom(org.opensearch.cluster.metadata.DecommissionAttributeMetadata.TYPE);
+
+        // Decommission Attribute should be removed.
+        assertNull(metadata);
+    }
+
     private ClusterState addDataNodes(ClusterState clusterState, String zone, String... nodeIds) {
         DiscoveryNodes.Builder nodeBuilder = DiscoveryNodes.builder(clusterState.nodes());
         org.opensearch.common.collect.List.of(nodeIds).forEach(nodeId -> nodeBuilder.add(newDataNode(nodeId, singletonMap("zone", zone))));
