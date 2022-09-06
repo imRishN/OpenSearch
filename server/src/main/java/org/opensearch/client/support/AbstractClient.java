@@ -51,6 +51,10 @@ import org.opensearch.action.admin.cluster.decommission.awareness.put.Decommissi
 import org.opensearch.action.admin.cluster.decommission.awareness.put.DecommissionRequest;
 import org.opensearch.action.admin.cluster.decommission.awareness.put.DecommissionRequestBuilder;
 import org.opensearch.action.admin.cluster.decommission.awareness.put.DecommissionResponse;
+import org.opensearch.action.admin.cluster.decommission.awareness.delete.DeleteDecommissionAction;
+import org.opensearch.action.admin.cluster.decommission.awareness.delete.DeleteDecommissionRequest;
+import org.opensearch.action.admin.cluster.decommission.awareness.delete.DeleteDecommissionRequestBuilder;
+import org.opensearch.action.admin.cluster.decommission.awareness.delete.DeleteDecommissionResponse;
 import org.opensearch.action.admin.cluster.health.ClusterHealthAction;
 import org.opensearch.action.admin.cluster.health.ClusterHealthRequest;
 import org.opensearch.action.admin.cluster.health.ClusterHealthRequestBuilder;
@@ -1353,6 +1357,22 @@ public abstract class AbstractClient implements Client {
             return new GetDecommissionStateRequestBuilder(this, GetDecommissionStateAction.INSTANCE);
         }
 
+        @Override
+        public ActionFuture<DeleteDecommissionResponse> deleteDecommission(DeleteDecommissionRequest request) {
+            return execute(DeleteDecommissionAction.INSTANCE, request);
+        }
+
+        @Override
+        public void deleteDecommission(DeleteDecommissionRequest request, ActionListener<DeleteDecommissionResponse> listener) {
+            execute(DeleteDecommissionAction.INSTANCE, request, listener);
+        }
+
+        @Override
+        public DeleteDecommissionRequestBuilder prepareDeleteDecommission() {
+            return new DeleteDecommissionRequestBuilder(this, DeleteDecommissionAction.INSTANCE);
+        }
+
+
     }
 
     static class IndicesAdmin implements IndicesAdminClient {
@@ -1895,6 +1915,7 @@ public abstract class AbstractClient implements Client {
         public ActionFuture<ResolveIndexAction.Response> resolveIndex(ResolveIndexAction.Request request) {
             return execute(ResolveIndexAction.INSTANCE, request);
         }
+
     }
 
     @Override

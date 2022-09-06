@@ -43,6 +43,9 @@ import org.opensearch.action.admin.cluster.decommission.awareness.get.GetDecommi
 import org.opensearch.action.admin.cluster.decommission.awareness.put.DecommissionRequest;
 import org.opensearch.action.admin.cluster.decommission.awareness.put.DecommissionRequestBuilder;
 import org.opensearch.action.admin.cluster.decommission.awareness.put.DecommissionResponse;
+import org.opensearch.action.admin.cluster.decommission.awareness.delete.DeleteDecommissionRequest;
+import org.opensearch.action.admin.cluster.decommission.awareness.delete.DeleteDecommissionRequestBuilder;
+import org.opensearch.action.admin.cluster.decommission.awareness.delete.DeleteDecommissionResponse;
 import org.opensearch.action.admin.cluster.health.ClusterHealthRequest;
 import org.opensearch.action.admin.cluster.health.ClusterHealthRequestBuilder;
 import org.opensearch.action.admin.cluster.health.ClusterHealthResponse;
@@ -827,4 +830,16 @@ public interface ClusterAdminClient extends OpenSearchClient {
      * Get Decommissioned attribute
      */
     GetDecommissionStateRequestBuilder prepareGetDecommission();
+
+    ActionFuture<DeleteDecommissionResponse> deleteDecommission(DeleteDecommissionRequest request);
+
+    /**
+     * Decommission a node
+     */
+    void deleteDecommission(DeleteDecommissionRequest request, ActionListener<DeleteDecommissionResponse> listener);
+
+    /**
+     * Decommission a node
+     */
+    DeleteDecommissionRequestBuilder prepareDeleteDecommission();
 }
