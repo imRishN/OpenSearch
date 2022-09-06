@@ -40,6 +40,8 @@ import org.opensearch.action.admin.cluster.configuration.AddVotingConfigExclusio
 import org.opensearch.action.admin.cluster.configuration.ClearVotingConfigExclusionsAction;
 import org.opensearch.action.admin.cluster.configuration.TransportAddVotingConfigExclusionsAction;
 import org.opensearch.action.admin.cluster.configuration.TransportClearVotingConfigExclusionsAction;
+import org.opensearch.action.admin.cluster.decommission.awareness.delete.DeleteDecommissionAction;
+import org.opensearch.action.admin.cluster.decommission.awareness.delete.TransportDeleteDecommissionAction;
 import org.opensearch.action.admin.cluster.decommission.awareness.get.GetDecommissionAction;
 import org.opensearch.action.admin.cluster.decommission.awareness.get.TransportGetDecommissionAction;
 import org.opensearch.action.admin.cluster.decommission.awareness.put.PutDecommissionAction;
@@ -304,6 +306,7 @@ import org.opensearch.rest.action.admin.cluster.RestClusterStateAction;
 import org.opensearch.rest.action.admin.cluster.RestClusterStatsAction;
 import org.opensearch.rest.action.admin.cluster.RestClusterUpdateSettingsAction;
 import org.opensearch.rest.action.admin.cluster.RestCreateSnapshotAction;
+import org.opensearch.rest.action.admin.cluster.RestDeleteDecommissionAction;
 import org.opensearch.rest.action.admin.cluster.RestDeleteRepositoryAction;
 import org.opensearch.rest.action.admin.cluster.RestDeleteSnapshotAction;
 import org.opensearch.rest.action.admin.cluster.RestDeleteStoredScriptAction;
@@ -687,6 +690,7 @@ public class ActionModule extends AbstractModule {
         // Decommission actions
         actions.register(PutDecommissionAction.INSTANCE, TransportPutDecommissionAction.class);
         actions.register(GetDecommissionAction.INSTANCE, TransportGetDecommissionAction.class);
+        actions.register(DeleteDecommissionAction.INSTANCE, TransportDeleteDecommissionAction.class);
 
         return unmodifiableMap(actions.getRegistry());
     }
@@ -875,6 +879,7 @@ public class ActionModule extends AbstractModule {
         registerHandler.accept(new RestCatAction(catActions));
         registerHandler.accept(new RestPutDecommissionAction());
         registerHandler.accept(new RestGetDecommissionAction());
+        registerHandler.accept(new RestDeleteDecommissionAction());
 
         // Remote Store APIs
         if (FeatureFlags.isEnabled(FeatureFlags.REMOTE_STORE)) {
