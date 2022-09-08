@@ -16,6 +16,7 @@ import org.opensearch.action.support.clustermanager.TransportClusterManagerNodeA
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.block.ClusterBlockException;
 import org.opensearch.cluster.block.ClusterBlockLevel;
+import org.opensearch.cluster.decommission.DecommissionService;
 import org.opensearch.cluster.metadata.IndexNameExpressionResolver;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
@@ -33,12 +34,13 @@ import java.io.IOException;
 public class TransportDecommissionAction extends TransportClusterManagerNodeAction<DecommissionRequest, DecommissionResponse> {
 
     private static final Logger logger = LogManager.getLogger(TransportDecommissionAction.class);
+    private DecommissionService decommissionService;
 
     @Inject
     public TransportDecommissionAction(
         TransportService transportService,
         ClusterService clusterService,
-        // DecommissionService decommissionService,
+        DecommissionService decommissionService,
         ThreadPool threadPool,
         ActionFilters actionFilters,
         IndexNameExpressionResolver indexNameExpressionResolver
@@ -52,8 +54,7 @@ public class TransportDecommissionAction extends TransportClusterManagerNodeActi
             DecommissionRequest::new,
             indexNameExpressionResolver
         );
-        // TODO - uncomment when integrating with the service
-        // this.decommissionService = decommissionService;
+         this.decommissionService = decommissionService;
     }
 
     @Override
@@ -75,12 +76,6 @@ public class TransportDecommissionAction extends TransportClusterManagerNodeActi
     protected void clusterManagerOperation(DecommissionRequest request, ClusterState state, ActionListener<DecommissionResponse> listener)
         throws Exception {
         logger.info("initiating awareness attribute [{}] decommissioning", request.getDecommissionAttribute().toString());
-        listener.onResponse(new DecommissionResponse(true)); // TODO - remove after integration
-        // TODO - uncomment when integrating with the service
-        // decommissionService.initiateAttributeDecommissioning(
-        // request.getDecommissionAttribute(),
-        // listener,
-        // state
-        // );
+        decommissionService.startDecommissionAction(request.getDecommissionAttribute(), listener);
     }
 }
