@@ -43,6 +43,18 @@ import org.opensearch.action.admin.cluster.allocation.ClusterAllocationExplainAc
 import org.opensearch.action.admin.cluster.allocation.ClusterAllocationExplainRequest;
 import org.opensearch.action.admin.cluster.allocation.ClusterAllocationExplainRequestBuilder;
 import org.opensearch.action.admin.cluster.allocation.ClusterAllocationExplainResponse;
+import org.opensearch.action.admin.cluster.decommission.awareness.get.GetDecommissionStateAction;
+import org.opensearch.action.admin.cluster.decommission.awareness.get.GetDecommissionStateRequest;
+import org.opensearch.action.admin.cluster.decommission.awareness.get.GetDecommissionStateRequestBuilder;
+import org.opensearch.action.admin.cluster.decommission.awareness.get.GetDecommissionStateResponse;
+import org.opensearch.action.admin.cluster.decommission.awareness.put.DecommissionAction;
+import org.opensearch.action.admin.cluster.decommission.awareness.put.DecommissionRequest;
+import org.opensearch.action.admin.cluster.decommission.awareness.put.DecommissionRequestBuilder;
+import org.opensearch.action.admin.cluster.decommission.awareness.put.DecommissionResponse;
+import org.opensearch.action.admin.cluster.decommission.awareness.delete.DeleteDecommissionAction;
+import org.opensearch.action.admin.cluster.decommission.awareness.delete.DeleteDecommissionRequest;
+import org.opensearch.action.admin.cluster.decommission.awareness.delete.DeleteDecommissionRequestBuilder;
+import org.opensearch.action.admin.cluster.decommission.awareness.delete.DeleteDecommissionResponse;
 import org.opensearch.action.admin.cluster.health.ClusterHealthAction;
 import org.opensearch.action.admin.cluster.health.ClusterHealthRequest;
 import org.opensearch.action.admin.cluster.health.ClusterHealthRequestBuilder;
@@ -240,6 +252,8 @@ import org.opensearch.action.admin.indices.segments.IndicesSegmentResponse;
 import org.opensearch.action.admin.indices.segments.IndicesSegmentsAction;
 import org.opensearch.action.admin.indices.segments.IndicesSegmentsRequest;
 import org.opensearch.action.admin.indices.segments.IndicesSegmentsRequestBuilder;
+import org.opensearch.action.admin.indices.segments.PitSegmentsAction;
+import org.opensearch.action.admin.indices.segments.PitSegmentsRequest;
 import org.opensearch.action.admin.indices.settings.get.GetSettingsAction;
 import org.opensearch.action.admin.indices.settings.get.GetSettingsRequest;
 import org.opensearch.action.admin.indices.settings.get.GetSettingsRequestBuilder;
@@ -591,6 +605,11 @@ public abstract class AbstractClient implements Client {
     @Override
     public void deletePits(final DeletePitRequest deletePITRequest, final ActionListener<DeletePitResponse> listener) {
         execute(DeletePitAction.INSTANCE, deletePITRequest, listener);
+    }
+
+    @Override
+    public void pitSegments(final PitSegmentsRequest request, final ActionListener<IndicesSegmentResponse> listener) {
+        execute(PitSegmentsAction.INSTANCE, request, listener);
     }
 
     @Override
@@ -1307,6 +1326,53 @@ public abstract class AbstractClient implements Client {
         public DeleteStoredScriptRequestBuilder prepareDeleteStoredScript(String id) {
             return prepareDeleteStoredScript().setId(id);
         }
+
+        @Override
+        public ActionFuture<DecommissionResponse> decommission(DecommissionRequest request) {
+            return execute(DecommissionAction.INSTANCE, request);
+        }
+
+        @Override
+        public void decommission(DecommissionRequest request, ActionListener<DecommissionResponse> listener) {
+            execute(DecommissionAction.INSTANCE, request, listener);
+        }
+
+        @Override
+        public DecommissionRequestBuilder prepareDecommission(DecommissionRequest request) {
+            return new DecommissionRequestBuilder(this, DecommissionAction.INSTANCE, request);
+        }
+
+        @Override
+        public ActionFuture<GetDecommissionStateResponse> getDecommission(GetDecommissionStateRequest request) {
+            return execute(GetDecommissionStateAction.INSTANCE, request);
+        }
+
+        @Override
+        public void getDecommission(GetDecommissionStateRequest request, ActionListener<GetDecommissionStateResponse> listener) {
+            execute(GetDecommissionStateAction.INSTANCE, request, listener);
+        }
+
+        @Override
+        public GetDecommissionStateRequestBuilder prepareGetDecommission() {
+            return new GetDecommissionStateRequestBuilder(this, GetDecommissionStateAction.INSTANCE);
+        }
+
+        @Override
+        public ActionFuture<DeleteDecommissionResponse> deleteDecommission(DeleteDecommissionRequest request) {
+            return execute(DeleteDecommissionAction.INSTANCE, request);
+        }
+
+        @Override
+        public void deleteDecommission(DeleteDecommissionRequest request, ActionListener<DeleteDecommissionResponse> listener) {
+            execute(DeleteDecommissionAction.INSTANCE, request, listener);
+        }
+
+        @Override
+        public DeleteDecommissionRequestBuilder prepareDeleteDecommission() {
+            return new DeleteDecommissionRequestBuilder(this, DeleteDecommissionAction.INSTANCE);
+        }
+
+
     }
 
     static class IndicesAdmin implements IndicesAdminClient {
@@ -1849,6 +1915,7 @@ public abstract class AbstractClient implements Client {
         public ActionFuture<ResolveIndexAction.Response> resolveIndex(ResolveIndexAction.Request request) {
             return execute(ResolveIndexAction.INSTANCE, request);
         }
+
     }
 
     @Override

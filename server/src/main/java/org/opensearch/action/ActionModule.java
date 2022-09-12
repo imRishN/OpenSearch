@@ -40,6 +40,12 @@ import org.opensearch.action.admin.cluster.configuration.AddVotingConfigExclusio
 import org.opensearch.action.admin.cluster.configuration.ClearVotingConfigExclusionsAction;
 import org.opensearch.action.admin.cluster.configuration.TransportAddVotingConfigExclusionsAction;
 import org.opensearch.action.admin.cluster.configuration.TransportClearVotingConfigExclusionsAction;
+import org.opensearch.action.admin.cluster.decommission.awareness.get.GetDecommissionStateAction;
+import org.opensearch.action.admin.cluster.decommission.awareness.get.TransportGetDecommissionStateAction;
+import org.opensearch.action.admin.cluster.decommission.awareness.put.DecommissionAction;
+import org.opensearch.action.admin.cluster.decommission.awareness.put.TransportDecommissionAction;
+import org.opensearch.action.admin.cluster.decommission.awareness.delete.DeleteDecommissionAction;
+import org.opensearch.action.admin.cluster.decommission.awareness.delete.TransportDeleteDecommissionAction;
 import org.opensearch.action.admin.cluster.health.ClusterHealthAction;
 import org.opensearch.action.admin.cluster.health.TransportClusterHealthAction;
 import org.opensearch.action.admin.cluster.node.hotthreads.NodesHotThreadsAction;
@@ -165,7 +171,9 @@ import org.opensearch.action.admin.indices.resolve.ResolveIndexAction;
 import org.opensearch.action.admin.indices.rollover.RolloverAction;
 import org.opensearch.action.admin.indices.rollover.TransportRolloverAction;
 import org.opensearch.action.admin.indices.segments.IndicesSegmentsAction;
+import org.opensearch.action.admin.indices.segments.PitSegmentsAction;
 import org.opensearch.action.admin.indices.segments.TransportIndicesSegmentsAction;
+import org.opensearch.action.admin.indices.segments.TransportPitSegmentsAction;
 import org.opensearch.action.admin.indices.settings.get.GetSettingsAction;
 import org.opensearch.action.admin.indices.settings.get.TransportGetSettingsAction;
 import org.opensearch.action.admin.indices.settings.put.TransportUpdateSettingsAction;
@@ -238,12 +246,14 @@ import org.opensearch.action.search.CreatePitAction;
 import org.opensearch.action.search.DeletePitAction;
 import org.opensearch.action.search.GetAllPitsAction;
 import org.opensearch.action.search.MultiSearchAction;
+import org.opensearch.action.search.NodesGetAllPitsAction;
 import org.opensearch.action.search.SearchAction;
 import org.opensearch.action.search.SearchScrollAction;
 import org.opensearch.action.search.TransportClearScrollAction;
 import org.opensearch.action.search.TransportCreatePitAction;
 import org.opensearch.action.search.TransportDeletePitAction;
 import org.opensearch.action.search.TransportGetAllPitsAction;
+import org.opensearch.action.search.TransportNodesGetAllPitsAction;
 import org.opensearch.action.search.TransportMultiSearchAction;
 import org.opensearch.action.search.TransportSearchAction;
 import org.opensearch.action.search.TransportSearchScrollAction;
@@ -298,9 +308,11 @@ import org.opensearch.rest.action.admin.cluster.RestClusterStateAction;
 import org.opensearch.rest.action.admin.cluster.RestClusterStatsAction;
 import org.opensearch.rest.action.admin.cluster.RestClusterUpdateSettingsAction;
 import org.opensearch.rest.action.admin.cluster.RestCreateSnapshotAction;
+import org.opensearch.rest.action.admin.cluster.RestDeleteDecommissionAction;
 import org.opensearch.rest.action.admin.cluster.RestDeleteRepositoryAction;
 import org.opensearch.rest.action.admin.cluster.RestDeleteSnapshotAction;
 import org.opensearch.rest.action.admin.cluster.RestDeleteStoredScriptAction;
+import org.opensearch.rest.action.admin.cluster.RestGetDecommissionStateAction;
 import org.opensearch.rest.action.admin.cluster.RestGetRepositoriesAction;
 import org.opensearch.rest.action.admin.cluster.RestGetScriptContextAction;
 import org.opensearch.rest.action.admin.cluster.RestGetScriptLanguageAction;
@@ -313,6 +325,7 @@ import org.opensearch.rest.action.admin.cluster.RestNodesInfoAction;
 import org.opensearch.rest.action.admin.cluster.RestNodesStatsAction;
 import org.opensearch.rest.action.admin.cluster.RestNodesUsageAction;
 import org.opensearch.rest.action.admin.cluster.RestPendingClusterTasksAction;
+import org.opensearch.rest.action.admin.cluster.RestDecommissionAction;
 import org.opensearch.rest.action.admin.cluster.RestPutRepositoryAction;
 import org.opensearch.rest.action.admin.cluster.RestPutStoredScriptAction;
 import org.opensearch.rest.action.admin.cluster.RestReloadSecureSettingsAction;
@@ -406,6 +419,8 @@ import org.opensearch.rest.action.ingest.RestPutPipelineAction;
 import org.opensearch.rest.action.ingest.RestSimulatePipelineAction;
 import org.opensearch.rest.action.search.RestClearScrollAction;
 import org.opensearch.rest.action.search.RestCountAction;
+import org.opensearch.rest.action.search.RestCreatePitAction;
+import org.opensearch.rest.action.search.RestDeletePitAction;
 import org.opensearch.rest.action.search.RestExplainAction;
 import org.opensearch.rest.action.search.RestMultiSearchAction;
 import org.opensearch.rest.action.search.RestSearchAction;
@@ -671,9 +686,16 @@ public class ActionModule extends AbstractModule {
         actions.register(CreatePitAction.INSTANCE, TransportCreatePitAction.class);
         actions.register(GetAllPitsAction.INSTANCE, TransportGetAllPitsAction.class);
         actions.register(DeletePitAction.INSTANCE, TransportDeletePitAction.class);
+        actions.register(PitSegmentsAction.INSTANCE, TransportPitSegmentsAction.class);
+        actions.register(NodesGetAllPitsAction.INSTANCE, TransportNodesGetAllPitsAction.class);
 
         // Remote Store
         actions.register(RestoreRemoteStoreAction.INSTANCE, TransportRestoreRemoteStoreAction.class);
+
+        // Decommission actions
+        actions.register(DecommissionAction.INSTANCE, TransportDecommissionAction.class);
+        actions.register(GetDecommissionStateAction.INSTANCE, TransportGetDecommissionStateAction.class);
+        actions.register(DeleteDecommissionAction.INSTANCE, TransportDeleteDecommissionAction.class);
 
         return unmodifiableMap(actions.getRegistry());
     }
@@ -846,6 +868,11 @@ public class ActionModule extends AbstractModule {
         registerHandler.accept(new RestRepositoriesAction());
         registerHandler.accept(new RestSnapshotAction());
         registerHandler.accept(new RestTemplatesAction());
+
+        // Point in time API
+        registerHandler.accept(new RestCreatePitAction());
+        registerHandler.accept(new RestDeletePitAction());
+
         for (ActionPlugin plugin : actionPlugins) {
             for (RestHandler handler : plugin.getRestHandlers(
                 settings,
@@ -860,6 +887,9 @@ public class ActionModule extends AbstractModule {
             }
         }
         registerHandler.accept(new RestCatAction(catActions));
+        registerHandler.accept(new RestDecommissionAction());
+        registerHandler.accept(new RestGetDecommissionStateAction());
+        registerHandler.accept(new RestDeleteDecommissionAction());
 
         // Remote Store APIs
         if (FeatureFlags.isEnabled(FeatureFlags.REMOTE_STORE)) {
