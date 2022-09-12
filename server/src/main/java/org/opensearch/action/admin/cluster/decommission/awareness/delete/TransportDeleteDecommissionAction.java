@@ -89,6 +89,7 @@ public class TransportDeleteDecommissionAction extends TransportClusterManagerNo
             @Override
             public void onFailure(Exception e) {
                 logger.error("Recommission failed with exception " + e.getMessage());
+                listener.onFailure(e);
             }
         });
 
