@@ -12,6 +12,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.message.ParameterizedMessage;
 import org.opensearch.action.ActionListener;
+import org.opensearch.action.admin.cluster.decommission.awareness.put.DecommissionResponse;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.ClusterStateUpdateTask;
 import org.opensearch.cluster.NotClusterManagerException;
@@ -117,7 +118,7 @@ public class DecommissionService {
      */
     public synchronized void startDecommissionAction(
         final DecommissionAttribute decommissionAttribute,
-        final ActionListener<ClusterStateUpdateResponse> listener
+        final ActionListener<DecommissionResponse> listener
     ) {
         // validates if correct awareness attributes and forced awareness attribute set to the cluster before starting action
         validateAwarenessAttribute(decommissionAttribute, awarenessAttributes, forcedAwarenessAttributes);
@@ -170,7 +171,7 @@ public class DecommissionService {
 
     private synchronized void decommissionClusterManagerNodes(
         final DecommissionAttribute decommissionAttribute,
-        ActionListener<ClusterStateUpdateResponse> listener
+        ActionListener<DecommissionResponse> listener
     ) {
         ClusterState state = clusterService.getClusterApplierService().state();
         Set<DiscoveryNode> clusterManagerNodesToBeDecommissioned = filterNodesWithDecommissionAttribute(state, decommissionAttribute, true);
@@ -199,7 +200,7 @@ public class DecommissionService {
                     logger.info("will attempt to fail decommissioned nodes as local node is eligible to process the request");
                     // we are good here to send the response now as the request is processed by an eligible active leader
                     // and to-be-decommissioned cluster manager is no more part of Voting Configuration
-                    listener.onResponse(new ClusterStateUpdateResponse(true));
+                    listener.onResponse(new DecommissionResponse(true));
                     failDecommissionedNodes(clusterService.getClusterApplierService().state());
                 } else {
                     // explicitly calling listener.onFailure with NotClusterManagerException as we can certainly say that
