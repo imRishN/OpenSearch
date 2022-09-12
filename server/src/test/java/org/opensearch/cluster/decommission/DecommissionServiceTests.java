@@ -13,6 +13,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.opensearch.Version;
 import org.opensearch.action.ActionListener;
+import org.opensearch.action.admin.cluster.decommission.awareness.put.DecommissionResponse;
 import org.opensearch.cluster.ClusterName;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.ack.ClusterStateUpdateResponse;
@@ -120,7 +121,7 @@ public class DecommissionServiceTests extends OpenSearchTestCase {
     @SuppressWarnings("unchecked")
     public void testDecommissioningNotStartedForInvalidAttributeName() {
         DecommissionAttribute decommissionAttribute = new DecommissionAttribute("rack", "rack-a");
-        ActionListener<ClusterStateUpdateResponse> listener = mock(ActionListener.class);
+        ActionListener<DecommissionResponse> listener = mock(ActionListener.class);
         DecommissioningFailedException e = expectThrows(
             DecommissioningFailedException.class,
             () -> decommissionService.startDecommissionAction(decommissionAttribute, listener)
@@ -131,7 +132,7 @@ public class DecommissionServiceTests extends OpenSearchTestCase {
     @SuppressWarnings("unchecked")
     public void testDecommissioningNotStartedForInvalidAttributeValue() {
         DecommissionAttribute decommissionAttribute = new DecommissionAttribute("zone", "random");
-        ActionListener<ClusterStateUpdateResponse> listener = mock(ActionListener.class);
+        ActionListener<DecommissionResponse> listener = mock(ActionListener.class);
         DecommissioningFailedException e = expectThrows(
             DecommissioningFailedException.class,
             () -> { decommissionService.startDecommissionAction(decommissionAttribute, listener); }
@@ -159,9 +160,9 @@ public class DecommissionServiceTests extends OpenSearchTestCase {
                 Metadata.builder(clusterService.state().metadata()).putCustom(DecommissionAttributeMetadata.TYPE, oldMetadata).build()
             )
         );
-        ActionListener<ClusterStateUpdateResponse> listener = new ActionListener<ClusterStateUpdateResponse>() {
+        ActionListener<DecommissionResponse> listener = new ActionListener<DecommissionResponse>() {
             @Override
-            public void onResponse(ClusterStateUpdateResponse clusterStateUpdateResponse) {
+            public void onResponse(DecommissionResponse clusterStateUpdateResponse) {
                 fail("on response shouldn't have been called");
             }
 
