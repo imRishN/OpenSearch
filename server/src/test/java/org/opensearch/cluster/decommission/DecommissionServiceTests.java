@@ -13,7 +13,6 @@ import org.junit.After;
 import org.junit.Before;
 import org.opensearch.Version;
 import org.opensearch.action.ActionListener;
-import org.opensearch.action.admin.cluster.decommission.awareness.put.DecommissionResponse;
 import org.opensearch.cluster.ClusterName;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.ack.ClusterStateUpdateResponse;
@@ -37,6 +36,8 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singletonMap;
@@ -117,20 +118,20 @@ public class DecommissionServiceTests extends OpenSearchTestCase {
     }
 
     @SuppressWarnings("unchecked")
-    public void testDecommissioningNotInitiatedForInvalidAttributeName() {
+    public void testDecommissioningNotStartedForInvalidAttributeName() {
         DecommissionAttribute decommissionAttribute = new DecommissionAttribute("rack", "rack-a");
-        ActionListener<DecommissionResponse> listener = mock(ActionListener.class);
+        ActionListener<ClusterStateUpdateResponse> listener = mock(ActionListener.class);
         DecommissioningFailedException e = expectThrows(
             DecommissioningFailedException.class,
-            () -> { decommissionService.startDecommissionAction(decommissionAttribute, listener); }
+            () -> decommissionService.startDecommissionAction(decommissionAttribute, listener)
         );
         assertThat(e.getMessage(), Matchers.endsWith("invalid awareness attribute requested for decommissioning"));
     }
 
     @SuppressWarnings("unchecked")
-    public void testDecommissioningNotInitiatedForInvalidAttributeValue() {
+    public void testDecommissioningNotStartedForInvalidAttributeValue() {
         DecommissionAttribute decommissionAttribute = new DecommissionAttribute("zone", "random");
-        ActionListener<DecommissionResponse> listener = mock(ActionListener.class);
+        ActionListener<ClusterStateUpdateResponse> listener = mock(ActionListener.class);
         DecommissioningFailedException e = expectThrows(
             DecommissioningFailedException.class,
             () -> { decommissionService.startDecommissionAction(decommissionAttribute, listener); }
@@ -144,10 +145,12 @@ public class DecommissionServiceTests extends OpenSearchTestCase {
     }
 
     @SuppressWarnings("unchecked")
-    public void testDecommissioningNotInitiatedWhenAlreadyDecommissioned() {
+    public void testDecommissioningFailedWhenAnotherAttributeDecommissioningSuccessful() throws InterruptedException {
+        final CountDownLatch countDownLatch = new CountDownLatch(1);
+        DecommissionStatus oldStatus = randomFrom(DecommissionStatus.SUCCESSFUL, DecommissionStatus.IN_PROGRESS, DecommissionStatus.INIT);
         DecommissionAttributeMetadata oldMetadata = new DecommissionAttributeMetadata(
             new DecommissionAttribute("zone", "zone_1"),
-            DecommissionStatus.IN_PROGRESS
+            oldStatus
         );
         final ClusterState.Builder builder = builder(clusterService.state());
         setState(
@@ -156,32 +159,28 @@ public class DecommissionServiceTests extends OpenSearchTestCase {
                 Metadata.builder(clusterService.state().metadata()).putCustom(DecommissionAttributeMetadata.TYPE, oldMetadata).build()
             )
         );
-        ActionListener<DecommissionResponse> listener = mock(ActionListener.class);
-        DecommissioningFailedException e = expectThrows(
-            DecommissioningFailedException.class,
-            () -> { decommissionService.startDecommissionAction(new DecommissionAttribute("zone", "zone_2"), listener); }
-        );
-        assertThat(e.getMessage(), Matchers.endsWith("another request for decommission is in flight, will not process this request"));
-    }
+        ActionListener<ClusterStateUpdateResponse> listener = new ActionListener<ClusterStateUpdateResponse>() {
+            @Override
+            public void onResponse(ClusterStateUpdateResponse clusterStateUpdateResponse) {
+                fail("on response shouldn't have been called");
+            }
 
-    @SuppressWarnings("unchecked")
-    public void testDecommissioningInitiatedWhenEnoughClusterManagerNodes() {
-        ActionListener<DecommissionResponse> listener = mock(ActionListener.class);
-        decommissionService.startDecommissionAction(new DecommissionAttribute("zone", "zone_3"), listener);
-    }
-
-    @SuppressWarnings("unchecked")
-    public void testDecommissioningNotInitiatedWhenNotEnoughClusterManagerNodes() {
-        ClusterState state = clusterService.state();
-        // shrink voting config
-        state = setNodesInVotingConfig(state, state.nodes().get("node1"), state.nodes().get("node11"));
-        setState(clusterService, state);
-        ActionListener<DecommissionResponse> listener = mock(ActionListener.class);
-        DecommissioningFailedException e = expectThrows(
-            DecommissioningFailedException.class,
-            () -> { decommissionService.startDecommissionAction(new DecommissionAttribute("zone", "zone_3"), listener); }
-        );
-        assertThat(e.getMessage(), Matchers.endsWith("cannot proceed with decommission request as cluster might go into quorum loss"));
+            @Override
+            public void onFailure(Exception e) {
+                assertTrue(e instanceof DecommissioningFailedException);
+                if (oldStatus.equals(DecommissionStatus.SUCCESSFUL)) {
+                    assertThat(
+                        e.getMessage(),
+                        Matchers.endsWith("already successfully decommissioned, recommission before triggering another decommission")
+                    );
+                } else {
+                    assertThat(e.getMessage(), Matchers.endsWith("is in progress, cannot process this request"));
+                }
+                countDownLatch.countDown();
+            }
+        };
+        decommissionService.startDecommissionAction(new DecommissionAttribute("zone", "zone_2"), listener);
+        assertTrue(countDownLatch.await(30, TimeUnit.SECONDS));
     }
 
     private ClusterState addDataNodes(ClusterState clusterState, String zone, String... nodeIds) {

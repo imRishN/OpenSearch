@@ -82,7 +82,12 @@ public class DecommissionController {
         transportService.sendRequest(
             transportService.getLocalNode(),
             AddVotingConfigExclusionsAction.NAME,
-            new AddVotingConfigExclusionsRequest(Strings.EMPTY_ARRAY, nodes.toArray(String[]::new), Strings.EMPTY_ARRAY, TimeValue.timeValueSeconds(30)),
+            new AddVotingConfigExclusionsRequest(
+                Strings.EMPTY_ARRAY,
+                nodes.toArray(String[]::new),
+                Strings.EMPTY_ARRAY,
+                TimeValue.timeValueSeconds(30)
+            ),
             new TransportResponseHandler<AddVotingConfigExclusionsResponse>() {
                 @Override
                 public void handleResponse(AddVotingConfigExclusionsResponse response) {
@@ -248,7 +253,6 @@ public class DecommissionController {
             public void clusterStateProcessed(String source, ClusterState oldState, ClusterState newState) {
                 DecommissionAttributeMetadata decommissionAttributeMetadata = newState.metadata()
                     .custom(DecommissionAttributeMetadata.TYPE);
-                logger.info("updated decommission status to [{}]", decommissionAttributeMetadata.status());
                 listener.onResponse(decommissionAttributeMetadata.status());
             }
         });
