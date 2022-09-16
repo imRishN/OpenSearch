@@ -163,7 +163,7 @@ public class DecommissionControllerTests extends OpenSearchTestCase {
             public void onFailure(Exception e) {
                 fail("unexpected failure occurred while clearing voting config exclusion" + e);
             }
-        });
+        }, false);
         assertTrue(countDownLatch.await(30, TimeUnit.SECONDS));
         assertThat(clusterService.getClusterApplierService().state().getVotingConfigExclusions(), empty());
     }
@@ -243,7 +243,7 @@ public class DecommissionControllerTests extends OpenSearchTestCase {
         ClusterState state = clusterService.state();
         Metadata metadata = state.metadata();
         Metadata.Builder mdBuilder = Metadata.builder(metadata);
-        mdBuilder.putCustom(DecommissionAttributeMetadata.TYPE, oldMetadata);
+        mdBuilder.decommissionAttributeMetadata(oldMetadata);
         state = ClusterState.builder(state).metadata(mdBuilder).build();
         setState(clusterService, state);
 
@@ -264,7 +264,7 @@ public class DecommissionControllerTests extends OpenSearchTestCase {
         );
         assertTrue(countDownLatch.await(30, TimeUnit.SECONDS));
         ClusterState newState = clusterService.getClusterApplierService().state();
-        DecommissionAttributeMetadata decommissionAttributeMetadata = newState.metadata().custom(DecommissionAttributeMetadata.TYPE);
+        DecommissionAttributeMetadata decommissionAttributeMetadata = newState.metadata().decommissionAttributeMetadata();
         assertEquals(decommissionAttributeMetadata.status(), DecommissionStatus.SUCCESSFUL);
     }
 

@@ -86,7 +86,8 @@ public class DecommissionController {
                 Strings.EMPTY_ARRAY,
                 nodes.toArray(String[]::new),
                 Strings.EMPTY_ARRAY,
-                TimeValue.timeValueSeconds(30)
+                TimeValue.timeValueSeconds(120) // giving a larger timeout of 120 sec as cluster might already be in stress when
+                                                // decommission is triggered
             ),
             new TransportResponseHandler<AddVotingConfigExclusionsResponse>() {
                 @Override
@@ -117,8 +118,9 @@ public class DecommissionController {
      *
      * @param listener callback for response or failure
      */
-    public void clearVotingConfigExclusion(ActionListener<Void> listener) {
+    public void clearVotingConfigExclusion(ActionListener<Void> listener, boolean waitForRemoval) {
         final ClearVotingConfigExclusionsRequest clearVotingConfigExclusionsRequest = new ClearVotingConfigExclusionsRequest();
+        clearVotingConfigExclusionsRequest.setWaitForRemoval(waitForRemoval);
         transportService.sendRequest(
             transportService.getLocalNode(),
             ClearVotingConfigExclusionsAction.NAME,
@@ -196,11 +198,15 @@ public class DecommissionController {
             @Override
             public void onClusterServiceClose() {
                 logger.warn("cluster service closed while waiting for removal of decommissioned nodes.");
+                logger.warn(
+                    "cluster service closed while waiting for removal of decommissioned nodes [{}]",
+                    nodesToBeDecommissioned.toString()
+                );
             }
 
             @Override
             public void onTimeout(TimeValue timeout) {
-                logger.info("timed out while waiting for removal of decommissioned nodes");
+                logger.info("timed out while waiting for removal of decommissioned nodes [{}]", nodesToBeDecommissioned.toString());
                 nodesRemovedListener.onFailure(
                     new OpenSearchTimeoutException(
                         "timed out [{}] while waiting for removal of decommissioned nodes [{}] to take effect",
@@ -222,26 +228,19 @@ public class DecommissionController {
     public void updateMetadataWithDecommissionStatus(DecommissionStatus decommissionStatus, ActionListener<DecommissionStatus> listener) {
         clusterService.submitStateUpdateTask(decommissionStatus.status(), new ClusterStateUpdateTask(Priority.URGENT) {
             @Override
-            public ClusterState execute(ClusterState currentState) throws Exception {
-                Metadata metadata = currentState.metadata();
-                DecommissionAttributeMetadata decommissionAttributeMetadata = metadata.custom(DecommissionAttributeMetadata.TYPE);
+            public ClusterState execute(ClusterState currentState) {
+                DecommissionAttributeMetadata decommissionAttributeMetadata = currentState.metadata().decommissionAttributeMetadata();
                 assert decommissionAttributeMetadata != null && decommissionAttributeMetadata.decommissionAttribute() != null;
-                // we need to update the status only when the previous stage is just behind than expected stage
-                // if the previous stage is already ahead of expected stage, we don't need to update the stage
-                // For failures, we update it no matter what
-                int previousStage = decommissionAttributeMetadata.status().stage();
-                int expectedStage = decommissionStatus.stage();
-                if (previousStage >= expectedStage) return currentState;
-                if (expectedStage - previousStage != 1 && !decommissionStatus.equals(DecommissionStatus.FAILED)) {
-                    throw new DecommissioningFailedException(
-                        decommissionAttributeMetadata.decommissionAttribute(),
-                        "invalid previous decommission status found while updating status"
-                    );
-                }
-                Metadata.Builder mdBuilder = Metadata.builder(metadata);
+                logger.info(
+                    "attempting to update current decommission status [{}] with expected status [{}]",
+                    decommissionAttributeMetadata.status().stage(),
+                    decommissionStatus
+                );
+                // withUpdatedStatus can throw DecommissioningFailedException if the sequence of update is not valid
                 DecommissionAttributeMetadata newMetadata = decommissionAttributeMetadata.withUpdatedStatus(decommissionStatus);
-                mdBuilder.putCustom(DecommissionAttributeMetadata.TYPE, newMetadata);
-                return ClusterState.builder(currentState).metadata(mdBuilder).build();
+                return ClusterState.builder(currentState)
+                    .metadata(Metadata.builder(currentState.metadata()).decommissionAttributeMetadata(newMetadata))
+                    .build();
             }
 
             @Override
@@ -251,8 +250,7 @@ public class DecommissionController {
 
             @Override
             public void clusterStateProcessed(String source, ClusterState oldState, ClusterState newState) {
-                DecommissionAttributeMetadata decommissionAttributeMetadata = newState.metadata()
-                    .custom(DecommissionAttributeMetadata.TYPE);
+                DecommissionAttributeMetadata decommissionAttributeMetadata = newState.metadata().decommissionAttributeMetadata();
                 listener.onResponse(decommissionAttributeMetadata.status());
             }
         });
