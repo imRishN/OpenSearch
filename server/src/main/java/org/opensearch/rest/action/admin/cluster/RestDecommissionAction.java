@@ -30,7 +30,8 @@ import static org.opensearch.rest.RestRequest.Method.PUT;
  */
 public class RestDecommissionAction extends BaseRestHandler {
 
-    private static final TimeValue DEFAULT_RETRY_TIMEOUT = TimeValue.timeValueMinutes(5L); // setting sufficiently large default retry timeout
+    private static final TimeValue DEFAULT_RETRY_TIMEOUT = TimeValue.timeValueMinutes(5L); // setting sufficiently large default retry
+                                                                                           // timeout
 
     @Override
     public List<Route> routes() {
@@ -60,9 +61,10 @@ public class RestDecommissionAction extends BaseRestHandler {
             attributeValue = request.param("awareness_attribute_value");
         }
         // for REST request, we will set the retry flag to false. User won't have the option to execute retry on REST
-        return decommissionRequest
-            .setDecommissionAttribute(new DecommissionAttribute(attributeName, attributeValue))
+        return decommissionRequest.setDecommissionAttribute(new DecommissionAttribute(attributeName, attributeValue))
             .setRetryOnClusterManagerChange(false)
-            .setRetryTimeout(TimeValue.parseTimeValue(request.param("timeout"), DEFAULT_RETRY_TIMEOUT, getClass().getSimpleName() + ".timeout"));
+            .setRetryTimeout(
+                TimeValue.parseTimeValue(request.param("timeout"), DEFAULT_RETRY_TIMEOUT, getClass().getSimpleName() + ".timeout")
+            );
     }
 }

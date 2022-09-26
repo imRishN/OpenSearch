@@ -18,7 +18,6 @@ import org.opensearch.action.admin.cluster.decommission.awareness.put.Decommissi
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.ClusterStateObserver;
 import org.opensearch.cluster.ClusterStateUpdateTask;
-import org.opensearch.cluster.NotClusterManagerException;
 import org.opensearch.cluster.metadata.Metadata;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.routing.allocation.AllocationService;
@@ -219,15 +218,18 @@ public class DecommissionService {
                 } else {
                     // since the local node is no longer cluster manager which could've happened due to leader abdication,
                     // hence retrying the decommission action until it times out
-                    logger.info(
-                        "local node is not eligible to process the request, "
-                            + "retrying the transport action until it times out"
-                    );
-                    decommissionController.retryDecommissionAction(decommissionRequest, startTime,
+                    logger.info("local node is not eligible to process the request, " + "retrying the transport action until it times out");
+                    decommissionController.retryDecommissionAction(
+                        decommissionRequest,
+                        startTime,
                         ActionListener.delegateResponse(listener, (delegatedListener, t) -> {
-                            logger.debug(() -> new ParameterizedMessage(
-                                "failed to retry decommission action for attribute [{}]", decommissionRequest.getDecommissionAttribute()
-                            ), t);
+                            logger.debug(
+                                () -> new ParameterizedMessage(
+                                    "failed to retry decommission action for attribute [{}]",
+                                    decommissionRequest.getDecommissionAttribute()
+                                ),
+                                t
+                            );
                             clearVotingConfigExclusionAndUpdateStatus(false, false); // TODO - need to test this
                             delegatedListener.onFailure(t);
                         })
@@ -481,10 +483,10 @@ public class DecommissionService {
         if (decommissionAttributeMetadata != null) {
             if (decommissionAttributeMetadata.status().equals(DecommissionStatus.INIT)
                 && decommissionRequest.retryOnClusterManagerChange() == false) {
-                   throw new DecommissioningFailedException(
-                       decommissionRequest.getDecommissionAttribute(),
-                       "concurrent request received to decommission attribute"
-                   );
+                throw new DecommissioningFailedException(
+                    decommissionRequest.getDecommissionAttribute(),
+                    "concurrent request received to decommission attribute"
+                );
             }
         }
     }

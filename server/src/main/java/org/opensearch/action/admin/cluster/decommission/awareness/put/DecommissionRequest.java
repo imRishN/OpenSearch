@@ -16,7 +16,6 @@ import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.unit.TimeValue;
 
 import java.io.IOException;
-import java.sql.Time;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
 
@@ -128,10 +127,13 @@ public class DecommissionRequest extends ClusterManagerNodeRequest<DecommissionR
 
     @Override
     public String toString() {
-        return "DecommissionRequest{" +
-            "decommissionAttribute=" + decommissionAttribute +
-            ", retryOnClusterManagerChange=" + retryOnClusterManagerChange +
-            ", retryTimeout=" + retryTimeout +
-            '}';
+        return "DecommissionRequest{"
+            + "decommissionAttribute="
+            + decommissionAttribute
+            + ", retryOnClusterManagerChange="
+            + retryOnClusterManagerChange
+            + ", retryTimeout="
+            + retryTimeout
+            + '}';
     }
 }

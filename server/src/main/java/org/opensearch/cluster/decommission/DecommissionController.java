@@ -10,7 +10,6 @@ package org.opensearch.cluster.decommission;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.message.ParameterizedMessage;
 import org.opensearch.OpenSearchTimeoutException;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.admin.cluster.configuration.AddVotingConfigExclusionsAction;
@@ -36,10 +35,8 @@ import org.opensearch.common.Priority;
 import org.opensearch.common.Strings;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.unit.TimeValue;
-import org.opensearch.discovery.ClusterManagerNotDiscoveredException;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportException;
-import org.opensearch.transport.TransportResponse;
 import org.opensearch.transport.TransportResponseHandler;
 import org.opensearch.transport.TransportService;
 
@@ -78,17 +75,25 @@ public class DecommissionController {
         this.threadPool = threadPool;
     }
 
-    public void retryDecommissionAction(DecommissionRequest decommissionRequest, long startTime, ActionListener<DecommissionResponse> listener) {
-        final long remainingTimeoutMS = decommissionRequest.getRetryTimeout().millis() - (threadPool.relativeTimeInMillis()
-            - startTime);
+    public void retryDecommissionAction(
+        DecommissionRequest decommissionRequest,
+        long startTime,
+        ActionListener<DecommissionResponse> listener
+    ) {
+        final long remainingTimeoutMS = decommissionRequest.getRetryTimeout().millis() - (threadPool.relativeTimeInMillis() - startTime);
         if (remainingTimeoutMS >= 0) {
-            logger.debug("timed out before retrying [{}] for attribute [{}] after cluster manager change",
-                DecommissionAction.NAME, decommissionRequest.getDecommissionAttribute());
-            listener.onFailure(new OpenSearchTimeoutException(
+            logger.debug(
                 "timed out before retrying [{}] for attribute [{}] after cluster manager change",
                 DecommissionAction.NAME,
                 decommissionRequest.getDecommissionAttribute()
-            ));
+            );
+            listener.onFailure(
+                new OpenSearchTimeoutException(
+                    "timed out before retrying [{}] for attribute [{}] after cluster manager change",
+                    DecommissionAction.NAME,
+                    decommissionRequest.getDecommissionAttribute()
+                )
+            );
             return;
         }
         decommissionRequest.setRetryOnClusterManagerChange(true);
