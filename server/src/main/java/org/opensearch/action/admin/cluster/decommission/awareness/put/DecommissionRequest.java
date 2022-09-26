@@ -13,8 +13,10 @@ import org.opensearch.action.support.clustermanager.ClusterManagerNodeRequest;
 import org.opensearch.cluster.decommission.DecommissionAttribute;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
+import org.opensearch.common.unit.TimeValue;
 
 import java.io.IOException;
+import java.sql.Time;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
 
@@ -29,22 +31,25 @@ public class DecommissionRequest extends ClusterManagerNodeRequest<DecommissionR
 
     private DecommissionAttribute decommissionAttribute;
     private boolean retryOnClusterManagerChange;
+    private TimeValue retryTimeout;
 
     public DecommissionRequest() {}
 
-    public DecommissionRequest(DecommissionAttribute decommissionAttribute, boolean retryOnClusterManagerChange) {
+    public DecommissionRequest(DecommissionAttribute decommissionAttribute, boolean retryOnClusterManagerChange, TimeValue retryTimeout) {
         this.decommissionAttribute = decommissionAttribute;
         this.retryOnClusterManagerChange = retryOnClusterManagerChange;
+        this.retryTimeout = retryTimeout;
     }
 
-    public DecommissionRequest(DecommissionAttribute decommissionAttribute) {
-        this(decommissionAttribute, false);
+    public DecommissionRequest(DecommissionAttribute decommissionAttribute, TimeValue retryTimeout) {
+        this(decommissionAttribute, false, retryTimeout);
     }
 
     public DecommissionRequest(StreamInput in) throws IOException {
         super(in);
         decommissionAttribute = new DecommissionAttribute(in);
         retryOnClusterManagerChange = in.readBoolean();
+        retryTimeout = in.readTimeValue();
     }
 
     @Override
@@ -52,6 +57,7 @@ public class DecommissionRequest extends ClusterManagerNodeRequest<DecommissionR
         super.writeTo(out);
         decommissionAttribute.writeTo(out);
         out.writeBoolean(retryOnClusterManagerChange);
+        out.writeTimeValue(retryTimeout);
     }
 
     /**
@@ -77,6 +83,17 @@ public class DecommissionRequest extends ClusterManagerNodeRequest<DecommissionR
     }
 
     /**
+     * Sets the retry timeout for the request
+     *
+     * @param retryTimeout retry time out for the request
+     * @return this request
+     */
+    public DecommissionRequest setRetryTimeout(TimeValue retryTimeout) {
+        this.retryTimeout = retryTimeout;
+        return this;
+    }
+
+    /**
      * @return Returns the decommission attribute key-value
      */
     public DecommissionAttribute getDecommissionAttribute() {
@@ -88,6 +105,13 @@ public class DecommissionRequest extends ClusterManagerNodeRequest<DecommissionR
      */
     public boolean retryOnClusterManagerChange() {
         return this.retryOnClusterManagerChange;
+    }
+
+    /**
+     * @return retry timeout
+     */
+    public TimeValue getRetryTimeout() {
+        return this.retryTimeout;
     }
 
     @Override
@@ -107,6 +131,7 @@ public class DecommissionRequest extends ClusterManagerNodeRequest<DecommissionR
         return "DecommissionRequest{" +
             "decommissionAttribute=" + decommissionAttribute +
             ", retryOnClusterManagerChange=" + retryOnClusterManagerChange +
+            ", retryTimeout=" + retryTimeout +
             '}';
     }
 }

@@ -67,6 +67,7 @@ public class DecommissionService {
     private final TransportService transportService;
     private final ThreadPool threadPool;
     private final DecommissionController decommissionController;
+    private final long startTime;
     private volatile List<String> awarenessAttributes;
     private volatile Map<String, List<String>> forcedAwarenessAttributes;
 
@@ -83,6 +84,7 @@ public class DecommissionService {
         this.transportService = transportService;
         this.threadPool = threadPool;
         this.decommissionController = new DecommissionController(clusterService, transportService, allocationService, threadPool);
+        this.startTime = threadPool.relativeTimeInMillis();
         this.awarenessAttributes = CLUSTER_ROUTING_ALLOCATION_AWARENESS_ATTRIBUTE_SETTING.get(settings);
         clusterSettings.addSettingsUpdateConsumer(CLUSTER_ROUTING_ALLOCATION_AWARENESS_ATTRIBUTE_SETTING, this::setAwarenessAttributes);
 
@@ -159,15 +161,17 @@ public class DecommissionService {
                     decommissionAttributeMetadata.decommissionAttribute(),
                     decommissionAttributeMetadata.status()
                 );
-                decommissionClusterManagerNodes(decommissionAttributeMetadata.decommissionAttribute(), listener);
+                assert decommissionAttributeMetadata.decommissionAttribute().equals(decommissionRequest.getDecommissionAttribute());
+                decommissionClusterManagerNodes(decommissionRequest, listener);
             }
         });
     }
 
     private synchronized void decommissionClusterManagerNodes(
-        final DecommissionAttribute decommissionAttribute,
+        final DecommissionRequest decommissionRequest,
         ActionListener<DecommissionResponse> listener
     ) {
+        final DecommissionAttribute decommissionAttribute = decommissionRequest.getDecommissionAttribute();
         ClusterState state = clusterService.getClusterApplierService().state();
         // since here metadata is already registered with INIT, we can guarantee that no new node with decommission attribute can further
         // join the cluster
@@ -213,20 +217,21 @@ public class DecommissionService {
                         failDecommissionedNodes(clusterService.getClusterApplierService().state());
                     }
                 } else {
-                    // explicitly calling listener.onFailure with NotClusterManagerException as the local node is not the cluster manager
-                    // this will ensures that request is retried until cluster manager times out
+                    // since the local node is no longer cluster manager which could've happened due to leader abdication,
+                    // hence retrying the decommission action until it times out
                     logger.info(
                         "local node is not eligible to process the request, "
-                            + "throwing NotClusterManagerException to attempt a retry on an eligible node"
+                            + "retrying the transport action until it times out"
                     );
-//                    listener.onFailure(
-//                        new NotClusterManagerException(
-//                            "node ["
-//                                + transportService.getLocalNode().toString()
-//                                + "] not eligible to execute decommission request. Will retry until timeout."
-//                        )
-//                    );
-                    decommissionController.retryDecommissionAction(decommissionAttribute, listener);
+                    decommissionController.retryDecommissionAction(decommissionRequest, startTime,
+                        ActionListener.delegateResponse(listener, (delegatedListener, t) -> {
+                            logger.debug(() -> new ParameterizedMessage(
+                                "failed to retry decommission action for attribute [{}]", decommissionRequest.getDecommissionAttribute()
+                            ), t);
+                            clearVotingConfigExclusionAndUpdateStatus(false, false); // TODO - need to test this
+                            delegatedListener.onFailure(t);
+                        })
+                    );
                 }
             }
 
