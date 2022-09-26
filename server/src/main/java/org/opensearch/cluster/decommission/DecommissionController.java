@@ -81,7 +81,7 @@ public class DecommissionController {
         ActionListener<DecommissionResponse> listener
     ) {
         final long remainingTimeoutMS = decommissionRequest.getRetryTimeout().millis() - (threadPool.relativeTimeInMillis() - startTime);
-        if (remainingTimeoutMS >= 0) {
+        if (remainingTimeoutMS <= 0) {
             logger.debug(
                 "timed out before retrying [{}] for attribute [{}] after cluster manager change",
                 DecommissionAction.NAME,
