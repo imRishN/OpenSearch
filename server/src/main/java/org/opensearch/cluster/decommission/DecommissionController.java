@@ -18,6 +18,9 @@ import org.opensearch.action.admin.cluster.configuration.AddVotingConfigExclusio
 import org.opensearch.action.admin.cluster.configuration.ClearVotingConfigExclusionsAction;
 import org.opensearch.action.admin.cluster.configuration.ClearVotingConfigExclusionsRequest;
 import org.opensearch.action.admin.cluster.configuration.ClearVotingConfigExclusionsResponse;
+import org.opensearch.action.admin.cluster.decommission.awareness.put.DecommissionAction;
+import org.opensearch.action.admin.cluster.decommission.awareness.put.DecommissionRequest;
+import org.opensearch.action.admin.cluster.decommission.awareness.put.DecommissionResponse;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.ClusterStateObserver;
 import org.opensearch.cluster.ClusterStateTaskConfig;
@@ -34,6 +37,7 @@ import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportException;
+import org.opensearch.transport.TransportResponse;
 import org.opensearch.transport.TransportResponseHandler;
 import org.opensearch.transport.TransportService;
 
@@ -70,6 +74,35 @@ public class DecommissionController {
         this.transportService = transportService;
         this.nodeRemovalExecutor = new NodeRemovalClusterStateTaskExecutor(allocationService, logger);
         this.threadPool = threadPool;
+    }
+
+    public void retryDecommissionAction(DecommissionAttribute decommissionAttribute, ActionListener<DecommissionResponse> listener) {
+        transportService.sendRequest(
+            transportService.getLocalNode(),
+            DecommissionAction.NAME,
+            new DecommissionRequest(decommissionAttribute, true),
+            new TransportResponseHandler<DecommissionResponse>() {
+                @Override
+                public void handleResponse(DecommissionResponse response) {
+                    listener.onResponse(response);
+                }
+
+                @Override
+                public void handleException(TransportException exp) {
+                    listener.onFailure(exp);
+                }
+
+                @Override
+                public String executor() {
+                    return ThreadPool.Names.SAME;
+                }
+
+                @Override
+                public DecommissionResponse read(StreamInput in) throws IOException {
+                    return new DecommissionResponse(in);
+                }
+            }
+        );
     }
 
     /**

@@ -28,22 +28,30 @@ import static org.opensearch.action.ValidateActions.addValidationError;
 public class DecommissionRequest extends ClusterManagerNodeRequest<DecommissionRequest> {
 
     private DecommissionAttribute decommissionAttribute;
+    private boolean retryOnClusterManagerChange;
 
     public DecommissionRequest() {}
 
-    public DecommissionRequest(DecommissionAttribute decommissionAttribute) {
+    public DecommissionRequest(DecommissionAttribute decommissionAttribute, boolean retryOnClusterManagerChange) {
         this.decommissionAttribute = decommissionAttribute;
+        this.retryOnClusterManagerChange = retryOnClusterManagerChange;
+    }
+
+    public DecommissionRequest(DecommissionAttribute decommissionAttribute) {
+        this(decommissionAttribute, false);
     }
 
     public DecommissionRequest(StreamInput in) throws IOException {
         super(in);
         decommissionAttribute = new DecommissionAttribute(in);
+        retryOnClusterManagerChange = in.readBoolean();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
         decommissionAttribute.writeTo(out);
+        out.writeBoolean(retryOnClusterManagerChange);
     }
 
     /**
@@ -58,10 +66,28 @@ public class DecommissionRequest extends ClusterManagerNodeRequest<DecommissionR
     }
 
     /**
+     * Sets retryOnClusterManagerChange for decommission request
+     *
+     * @param retryOnClusterManagerChange boolean for request to retry decommission action on cluster manager change
+     * @return this request
+     */
+    public DecommissionRequest setRetryOnClusterManagerChange(boolean retryOnClusterManagerChange) {
+        this.retryOnClusterManagerChange = retryOnClusterManagerChange;
+        return this;
+    }
+
+    /**
      * @return Returns the decommission attribute key-value
      */
     public DecommissionAttribute getDecommissionAttribute() {
         return this.decommissionAttribute;
+    }
+
+    /**
+     * @return Returns whether decommission is retry eligible on cluster manager change
+     */
+    public boolean retryOnClusterManagerChange() {
+        return this.retryOnClusterManagerChange;
     }
 
     @Override
@@ -78,6 +104,9 @@ public class DecommissionRequest extends ClusterManagerNodeRequest<DecommissionR
 
     @Override
     public String toString() {
-        return "DecommissionRequest{" + "decommissionAttribute=" + decommissionAttribute + '}';
+        return "DecommissionRequest{" +
+            "decommissionAttribute=" + decommissionAttribute +
+            ", retryOnClusterManagerChange=" + retryOnClusterManagerChange +
+            '}';
     }
 }

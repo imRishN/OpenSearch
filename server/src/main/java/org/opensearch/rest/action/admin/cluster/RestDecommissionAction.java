@@ -56,6 +56,9 @@ public class RestDecommissionAction extends BaseRestHandler {
         if (request.hasParam("awareness_attribute_value")) {
             attributeValue = request.param("awareness_attribute_value");
         }
-        return decommissionRequest.setDecommissionAttribute(new DecommissionAttribute(attributeName, attributeValue));
+        // for REST request, we will set the retry flag to false. User won't have the option to execute retry on REST
+        return decommissionRequest
+            .setDecommissionAttribute(new DecommissionAttribute(attributeName, attributeValue))
+            .setRetryOnClusterManagerChange(false);
     }
 }

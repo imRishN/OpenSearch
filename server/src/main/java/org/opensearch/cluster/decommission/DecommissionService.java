@@ -13,6 +13,7 @@ import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.message.ParameterizedMessage;
 import org.opensearch.OpenSearchTimeoutException;
 import org.opensearch.action.ActionListener;
+import org.opensearch.action.admin.cluster.decommission.awareness.put.DecommissionRequest;
 import org.opensearch.action.admin.cluster.decommission.awareness.put.DecommissionResponse;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.ClusterStateObserver;
@@ -112,13 +113,14 @@ public class DecommissionService {
      * Starts the new decommission request and registers the metadata with status as {@link DecommissionStatus#INIT}
      * Once the status is updated, it tries to exclude to-be-decommissioned cluster manager eligible nodes from Voting Configuration
      *
-     * @param decommissionAttribute register decommission attribute in the metadata request
+     * @param decommissionRequest request for decommission action
      * @param listener register decommission listener
      */
     public void startDecommissionAction(
-        final DecommissionAttribute decommissionAttribute,
+        final DecommissionRequest decommissionRequest,
         final ActionListener<DecommissionResponse> listener
     ) {
+        final DecommissionAttribute decommissionAttribute = decommissionRequest.getDecommissionAttribute();
         // register the metadata with status as INIT as first step
         clusterService.submitStateUpdateTask("decommission [" + decommissionAttribute + "]", new ClusterStateUpdateTask(Priority.URGENT) {
             @Override
@@ -128,6 +130,7 @@ public class DecommissionService {
                 DecommissionAttributeMetadata decommissionAttributeMetadata = currentState.metadata().decommissionAttributeMetadata();
                 // check that request is eligible to proceed
                 ensureEligibleRequest(decommissionAttributeMetadata, decommissionAttribute);
+                ensureEligibleRetry(decommissionRequest, decommissionAttributeMetadata);
                 decommissionAttributeMetadata = new DecommissionAttributeMetadata(decommissionAttribute);
                 logger.info("registering decommission metadata [{}] to execute action", decommissionAttributeMetadata.toString());
                 return ClusterState.builder(currentState)
@@ -216,13 +219,14 @@ public class DecommissionService {
                         "local node is not eligible to process the request, "
                             + "throwing NotClusterManagerException to attempt a retry on an eligible node"
                     );
-                    listener.onFailure(
-                        new NotClusterManagerException(
-                            "node ["
-                                + transportService.getLocalNode().toString()
-                                + "] not eligible to execute decommission request. Will retry until timeout."
-                        )
-                    );
+//                    listener.onFailure(
+//                        new NotClusterManagerException(
+//                            "node ["
+//                                + transportService.getLocalNode().toString()
+//                                + "] not eligible to execute decommission request. Will retry until timeout."
+//                        )
+//                    );
+                    decommissionController.retryDecommissionAction(decommissionAttribute, listener);
                 }
             }
 
@@ -465,6 +469,18 @@ public class DecommissionService {
 
         if (msg != null) {
             throw new DecommissioningFailedException(requestedDecommissionAttribute, msg);
+        }
+    }
+
+    public void ensureEligibleRetry(DecommissionRequest decommissionRequest, DecommissionAttributeMetadata decommissionAttributeMetadata) {
+        if (decommissionAttributeMetadata != null) {
+            if (decommissionAttributeMetadata.status().equals(DecommissionStatus.INIT)
+                && decommissionRequest.retryOnClusterManagerChange() == false) {
+                   throw new DecommissioningFailedException(
+                       decommissionRequest.getDecommissionAttribute(),
+                       "concurrent request received to decommission attribute"
+                   );
+            }
         }
     }
 
