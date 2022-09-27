@@ -51,6 +51,7 @@ import org.opensearch.cluster.routing.RerouteService;
 import org.opensearch.cluster.routing.allocation.AllocationService;
 import org.opensearch.common.Priority;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.KillSwitch;
 import org.opensearch.persistent.PersistentTasksCustomMetadata;
 import org.opensearch.transport.TransportService;
 
@@ -477,6 +478,9 @@ public class JoinTaskExecutor implements ClusterStateTaskExecutor<JoinTaskExecut
     }
 
     public static void ensureNodeCommissioned(DiscoveryNode node, Metadata metadata) {
+        if (KillSwitch.isDisabled(KillSwitch.AWARENESS_ATTRIBUTE_DECOMMISSION)) {
+            return;
+        }
         DecommissionAttributeMetadata decommissionAttributeMetadata = metadata.decommissionAttributeMetadata();
         if (decommissionAttributeMetadata != null) {
             DecommissionAttribute decommissionAttribute = decommissionAttributeMetadata.decommissionAttribute();

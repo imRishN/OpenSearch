@@ -123,6 +123,9 @@ grant {
   // needed for feature flags
   permission java.util.PropertyPermission "opensearch.experimental.feature.*", "write";
 
+  // needed for kill switch
+  permission java.util.PropertyPermission "opensearch.feature.switch.*", "write";
+
   // TODO: these simply trigger a noisy warning if its unable to clear the properties
   // fix that in randomizedtesting
   permission java.util.PropertyPermission "junit4.childvm.count", "write";
