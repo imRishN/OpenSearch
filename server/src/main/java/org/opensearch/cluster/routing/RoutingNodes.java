@@ -334,6 +334,10 @@ public class RoutingNodes implements Iterable<RoutingNode> {
         return relocatingShards;
     }
 
+    public int getInitializingShardCount() {
+        return inactiveShardCount;
+    }
+
     /**
      * Returns all shards that are not in the state UNASSIGNED with the same shard
      * ID as the given shard.

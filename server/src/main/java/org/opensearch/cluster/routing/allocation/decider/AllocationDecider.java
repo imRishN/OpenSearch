@@ -153,6 +153,14 @@ public abstract class AllocationDecider {
     }
 
     /**
+     * Returns a {@link Decision} whether any shard can be allocated in the cluster
+     * {@link RoutingAllocation}. The default is {@link Decision#ALWAYS}.
+     */
+    public Decision canAllocateAnyShard(RoutingAllocation allocation) {
+        return Decision.ALWAYS;
+    }
+
+    /**
      * Returns a {@link Decision} whether any shard on the given
      * {@link RoutingNode}} can be allocated The default is {@link Decision#ALWAYS}.
      * All implementations that override this behaviour must take a

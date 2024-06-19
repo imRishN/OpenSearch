@@ -793,6 +793,13 @@ public class LocalShardsBalancer extends ShardsBalancer {
         int primaryLength = primary.length;
         ArrayUtil.timSort(primary, comparator);
         do {
+            if (allocation.deciders().canAllocateAnyShard(allocation).type() == Decision.Type.THROTTLE) {
+                logger.info(
+                    "Cannot allocate any shard in the cluster due to cluster concurrent recoveries getting breached"
+                        + ". Skipping shard iteration"
+                );
+                return;
+            }
             for (int i = 0; i < primaryLength; i++) {
                 ShardRouting shard = primary[i];
                 final AllocateUnassignedDecision allocationDecision = decideAllocateUnassigned(shard);

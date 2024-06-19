@@ -314,6 +314,24 @@ public class AllocationDeciders extends AllocationDecider {
         return ret;
     }
 
+    @Override
+    public Decision canAllocateAnyShard(RoutingAllocation allocation) {
+        Decision.Multi ret = new Decision.Multi();
+        for (AllocationDecider decider: allocations) {
+            Decision decision = decider.canAllocateAnyShard(allocation);
+            if (decision.type().canPreemptivelyReturn()) {
+                if (allocation.debugDecision() == false) {
+                    return decision;
+                } else {
+                    ret.add(decision);
+                }
+            } else {
+                addDecision(ret, decision, allocation);
+            }
+        }
+        return ret;
+    }
+
     private void addDecision(Decision.Multi ret, Decision decision, RoutingAllocation allocation) {
         // We never add ALWAYS decisions and only add YES decisions when requested by debug mode (since Multi default is YES).
         if (decision != Decision.ALWAYS

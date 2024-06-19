@@ -91,6 +91,32 @@ public class ConcurrentRecoveriesAllocationDecider extends AllocationDecider {
     }
 
     @Override
+    public Decision canAllocateAnyShard(RoutingAllocation allocation) {
+        if (clusterConcurrentRecoveries == -1) {
+            return allocation.decision(Decision.YES, NAME, "undefined cluster concurrent recoveries");
+        }
+        int initializingShards = allocation.routingNodes().getInitializingShardCount();
+        if (initializingShards >= clusterConcurrentRecoveries) {
+            return allocation.decision(
+                Decision.THROTTLE,
+                NAME,
+                "too many shards are concurrently initializing [%d], limit: [%d] cluster setting [%s=%d]",
+                initializingShards,
+                clusterConcurrentRecoveries,
+                CLUSTER_ROUTING_ALLOCATION_CLUSTER_CONCURRENT_RECOVERIES_SETTING.getKey(),
+                clusterConcurrentRecoveries
+            );
+        }
+        return allocation.decision(
+            Decision.YES,
+            NAME,
+            "below threshold [%d] for concurrent recoveries, current initializing shard count [%d]",
+            clusterConcurrentRecoveries,
+            initializingShards
+        );
+    }
+
+    @Override
     public Decision canAllocate(ShardRouting shardRouting, RoutingNode node, RoutingAllocation allocation) {
         return canMoveAnyShard(allocation);
     }
