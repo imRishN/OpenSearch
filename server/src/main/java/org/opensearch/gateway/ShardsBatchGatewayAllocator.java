@@ -29,6 +29,7 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.lease.Releasables;
 import org.opensearch.common.settings.Setting;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.concurrent.ConcurrentCollections;
 import org.opensearch.common.util.set.Sets;
 import org.opensearch.core.action.ActionListener;
@@ -66,7 +67,9 @@ public class ShardsBatchGatewayAllocator implements ExistingShardsAllocator {
     public static final String ALLOCATOR_NAME = "shards_batch_gateway_allocator";
     private static final Logger logger = LogManager.getLogger(ShardsBatchGatewayAllocator.class);
     private final long maxBatchSize;
+    private final TimeValue batchAllocatorRerouteTimeout;
     private static final short DEFAULT_SHARD_BATCH_SIZE = 2000;
+    private static final String BATCH_ALLOCATOR_REROUTE_TIMEOUT_SETTING_KEY = "cluster.routing.allocation.shards_batch_gateway_allocator.reroute_timeout";
 
     /**
      * Number of shards we send in one batch to data nodes for fetching metadata
@@ -76,6 +79,12 @@ public class ShardsBatchGatewayAllocator implements ExistingShardsAllocator {
         DEFAULT_SHARD_BATCH_SIZE,
         1,
         10000,
+        Setting.Property.NodeScope
+    );
+
+    public static final Setting<TimeValue> BATCH_ALLOCATOR_REROUTE_TIMEOUT_SETTING = Setting.timeSetting(
+        BATCH_ALLOCATOR_REROUTE_TIMEOUT_SETTING_KEY,
+        TimeValue.timeValueSeconds(30),
         Setting.Property.NodeScope
     );
 
@@ -105,6 +114,7 @@ public class ShardsBatchGatewayAllocator implements ExistingShardsAllocator {
         this.batchStartedAction = batchStartedAction;
         this.batchStoreAction = batchStoreAction;
         this.maxBatchSize = GATEWAY_ALLOCATOR_BATCH_SIZE.get(settings);
+        this.batchAllocatorRerouteTimeout = BATCH_ALLOCATOR_REROUTE_TIMEOUT_SETTING.get(settings);
     }
 
     @Override
@@ -205,19 +215,41 @@ public class ShardsBatchGatewayAllocator implements ExistingShardsAllocator {
         if (batchesToAssign.isEmpty()) {
             return;
         }
+        int totalBatchSuccessfullyExecuted = 0;
+        logger.info("Total batches identified in this reroute cycle: [{}]", batchesToAssign.size());
+        long startTime = System.currentTimeMillis();
         if (primary) {
-            batchIdToStartedShardBatch.values()
-                .stream()
-                .filter(batch -> batchesToAssign.contains(batch.batchId))
-                .forEach(
-                    shardsBatch -> primaryBatchShardAllocator.allocateUnassignedBatch(shardsBatch.getBatchedShardRoutings(), allocation)
-                );
+            for (ShardsBatch shardsBatch: batchIdToStartedShardBatch.values()) {
+                if (System.currentTimeMillis() - startTime > batchAllocatorRerouteTimeout.millis()) {
+                    break;
+                }
+                if (batchesToAssign.contains(shardsBatch.batchId)) {
+                    logger.info("Allocating unassigned primary shards batch with total [{}] shards in the batch with id [{}]",
+                        shardsBatch.getBatchedShardRoutings().size(), shardsBatch.batchId);
+                    long startTimeOfBatch = System.currentTimeMillis();
+                    primaryBatchShardAllocator.allocateUnassignedBatch(shardsBatch.getBatchedShardRoutings(), allocation);
+                    logger.info("Time taken to allocate unassigned primary batch with id [{}] in this cycle:[{}ms]",
+                        shardsBatch.batchId, System.currentTimeMillis() - startTimeOfBatch);
+                    totalBatchSuccessfullyExecuted++;
+                }
+            }
         } else {
-            batchIdToStoreShardBatch.values()
-                .stream()
-                .filter(batch -> batchesToAssign.contains(batch.batchId))
-                .forEach(batch -> replicaBatchShardAllocator.allocateUnassignedBatch(batch.getBatchedShardRoutings(), allocation));
+            for (ShardsBatch shardsBatch: batchIdToStoreShardBatch.values()) {
+                if (System.currentTimeMillis() - startTime > batchAllocatorRerouteTimeout.millis()) {
+                    break;
+                }
+                if (batchesToAssign.contains(shardsBatch.batchId)) {
+                    logger.info("Allocating unassigned replica shards batch with total [{}] shards in the batch with id [{}]",
+                        shardsBatch.getBatchedShardRoutings().size(), shardsBatch.batchId);
+                    long startTimeOfBatch = System.currentTimeMillis();
+                    replicaBatchShardAllocator.allocateUnassignedBatch(shardsBatch.getBatchedShardRoutings(), allocation);
+                    logger.info("Time taken to allocate unassigned replica batch with id [{}] in this cycle:[{}ms]",
+                        shardsBatch.batchId, System.currentTimeMillis() - startTimeOfBatch);
+                    totalBatchSuccessfullyExecuted++;
+                }
+            }
         }
+        logger.info("Total batches: [{}], batches successfully executed: [{}] in this cycle", batchesToAssign.size(), totalBatchSuccessfullyExecuted);
     }
 
     // visible for testing
