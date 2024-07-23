@@ -122,6 +122,9 @@ public class ShardsBatchGatewayAllocator implements ExistingShardsAllocator {
     private final TransportNodesListGatewayStartedShardsBatch batchStartedAction;
     private final TransportNodesListShardStoreMetadataBatch batchStoreAction;
 
+    private Set<ShardId> timedOutPrimaryShardIds;
+    private Set<ShardId> timedOutReplicaShardIds;
+
     @Inject
     public ShardsBatchGatewayAllocator(
         RerouteService rerouteService,
@@ -245,24 +248,26 @@ public class ShardsBatchGatewayAllocator implements ExistingShardsAllocator {
         }
         List<TimeoutAwareRunnable> runnables = new ArrayList<>();
         if (primary) {
+            timedOutPrimaryShardIds = new HashSet<>();
             batchIdToStartedShardBatch.values()
                 .stream()
                 .filter(batch -> batchesToAssign.contains(batch.batchId))
                 .forEach(shardsBatch -> runnables.add(new TimeoutAwareRunnable() {
                     @Override
                     public void onTimeout() {
-                        long startTime = System.nanoTime();
-                        primaryBatchShardAllocator.allocateUnassignedBatchOnTimeout(
-                            shardsBatch.getBatchedShardRoutings(),
-                            allocation,
-                            true
-                        );
-                        logger.info(
-                            "Time taken to execute allocateUnassignedBatchOnTimeout for unassigned primary batch with id [{}], size : [{}] in this cycle:[{}ms]",
-                            shardsBatch.batchId,
-                            shardsBatch.getBatchedShardRoutings().size(),
-                            TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startTime)
-                        );
+//                        long startTime = System.nanoTime();
+//                        primaryBatchShardAllocator.allocateUnassignedBatchOnTimeout(
+//                            shardsBatch.getBatchedShardRoutings(),
+//                            allocation,
+//                            true
+//                        );
+//                        logger.info(
+//                            "Time taken to execute allocateUnassignedBatchOnTimeout for unassigned primary batch with id [{}], size : [{}] in this cycle:[{}ms]",
+//                            shardsBatch.batchId,
+//                            shardsBatch.getBatchedShardRoutings().size(),
+//                            TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startTime)
+//                        );
+                        timedOutPrimaryShardIds.addAll(shardsBatch.getBatchedShards());
                     }
 
                     @Override
@@ -278,22 +283,29 @@ public class ShardsBatchGatewayAllocator implements ExistingShardsAllocator {
 
                     }
                 }));
-            return new BatchRunnableExecutor(runnables, () -> primaryShardsBatchGatewayAllocatorTimeout);
+            return new BatchRunnableExecutor(runnables, () -> primaryShardsBatchGatewayAllocatorTimeout) {
+                @Override
+                public void onComplete() {
+                    primaryBatchShardAllocator.allocateUnassignedBatchOnTimeout(timedOutPrimaryShardIds, allocation, true);
+                }
+            };
         } else {
+            timedOutReplicaShardIds = new HashSet<>();
             batchIdToStoreShardBatch.values()
                 .stream()
                 .filter(batch -> batchesToAssign.contains(batch.batchId))
                 .forEach(batch -> runnables.add(new TimeoutAwareRunnable() {
                     @Override
                     public void onTimeout() {
-                        long startTime = System.nanoTime();
-                        replicaBatchShardAllocator.allocateUnassignedBatchOnTimeout(batch.getBatchedShardRoutings(), allocation, false);
-                        logger.info(
-                            "Time taken to execute allocateUnassignedBatchOnTimeout for unassigned replica batch with id [{}], size : [{}] in this cycle:[{}ms]",
-                            batch.batchId,
-                            batch.getBatchedShardRoutings().size(),
-                            TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startTime)
-                        );
+//                        long startTime = System.nanoTime();
+//                        replicaBatchShardAllocator.allocateUnassignedBatchOnTimeout(batch.getBatchedShardRoutings(), allocation, false);
+//                        logger.info(
+//                            "Time taken to execute allocateUnassignedBatchOnTimeout for unassigned replica batch with id [{}], size : [{}] in this cycle:[{}ms]",
+//                            batch.batchId,
+//                            batch.getBatchedShardRoutings().size(),
+//                            TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startTime)
+//                        );
+                        timedOutReplicaShardIds.addAll(batch.getBatchedShards());
 
                     }
 
@@ -310,7 +322,12 @@ public class ShardsBatchGatewayAllocator implements ExistingShardsAllocator {
 
                     }
                 }));
-            return new BatchRunnableExecutor(runnables, () -> replicaShardsBatchGatewayAllocatorTimeout);
+            return new BatchRunnableExecutor(runnables, () -> replicaShardsBatchGatewayAllocatorTimeout) {
+                @Override
+                public void onComplete() {
+                    replicaBatchShardAllocator.allocateUnassignedBatchOnTimeout(timedOutReplicaShardIds, allocation, false);
+                }
+            };
         }
     }
 
